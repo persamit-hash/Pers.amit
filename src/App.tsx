@@ -4,7 +4,8 @@ import {
   initAuth,
   googleSignIn,
   logout,
-  getAccessToken
+  getAccessToken,
+  AuthExpiredError
 } from './services/auth';
 import {
   fetchFullStructure,
@@ -13,7 +14,8 @@ import {
   saveTopicSettings,
   uploadFileToTopic,
   deleteDriveFile,
-  renameDriveItem
+  renameDriveItem,
+  getCachedStructure
 } from './services/driveService';
 import {
   createOrUpdateRevisionCalendarEvent,
@@ -24,17 +26,18 @@ import {
   deleteTask,
   completeTask
 } from './services/tasksService';
-import { SubjectItem, TopicItem, DriveFileItem, RevisionSettings, UploadProgress } from './types';
+import { SubjectItem, TopicItem, DriveFileItem, RevisionSettings, RevisionLogEntry, UploadProgress } from './types';
 import { Navbar } from './components/Navbar';
 import { Sidebar } from './components/Sidebar';
 import { TopicDetail } from './components/TopicDetail';
 import { RevisionPlanner } from './components/RevisionPlanner';
 import { StudyDashboard } from './components/StudyDashboard';
+import { TodayRevision } from './components/TodayRevision';
 import { AuthLanding } from './components/AuthLanding';
 import { ConfirmationModal } from './components/ConfirmationModal';
 import { FilePreviewModal } from './components/FilePreviewModal';
 import { getRevisionStatus } from './utils/revisionUtils';
-import { BookOpen, FolderPlus, Layers, Plus } from 'lucide-react';
+import { BookOpen, FolderPlus, Layers, Plus, Info, AlertCircle, CheckCircle2 } from 'lucide-react';
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null);
@@ -42,11 +45,17 @@ export default function App() {
   const [authLoading, setAuthLoading] = useState<boolean>(true);
   const [isLoggingIn, setIsLoggingIn] = useState<boolean>(false);
 
-  // App data state
-  const [rootFolderId, setRootFolderId] = useState<string | null>(null);
-  const [subjects, setSubjects] = useState<SubjectItem[]>([]);
-  const [selectedTopicId, setSelectedTopicId] = useState<string | null>(null);
-  const [activeView, setActiveView] = useState<'topic' | 'planner' | 'dashboard'>('topic');
+  // App data state (hydrated with offline cache for instant loading)
+  const cachedInitial = useRef(getCachedStructure()).current;
+  const [rootFolderId, setRootFolderId] = useState<string | null>(cachedInitial.rootFolderId);
+  const [subjects, setSubjects] = useState<SubjectItem[]>(cachedInitial.subjects);
+  const [selectedTopicId, setSelectedTopicId] = useState<string | null>(() => {
+    if (cachedInitial.subjects.length > 0 && cachedInitial.subjects[0].topics.length > 0) {
+      return cachedInitial.subjects[0].topics[0].id;
+    }
+    return null;
+  });
+  const [activeView, setActiveView] = useState<'topic' | 'planner' | 'dashboard' | 'today'>('dashboard');
 
   // Sync state
   const [isSyncing, setIsSyncing] = useState<boolean>(false);
@@ -56,6 +65,7 @@ export default function App() {
   // Modals & Preview
   const [previewFile, setPreviewFile] = useState<DriveFileItem | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [toastType, setToastType] = useState<'info' | 'error' | 'success'>('info');
 
   // Confirmation Modal State (MANDATORY for destructive Workspace actions)
   const [confirmModal, setConfirmModal] = useState<{
@@ -83,7 +93,8 @@ export default function App() {
   const [renameInputValue, setRenameInputValue] = useState('');
 
   // Show temporary toast
-  const showToast = (msg: string) => {
+  const showToast = (msg: string, type: 'info' | 'error' | 'success' = 'info') => {
+    setToastType(type);
     setToastMessage(msg);
     setTimeout(() => {
       setToastMessage((cur) => (cur === msg ? null : cur));
@@ -129,8 +140,29 @@ export default function App() {
         return null;
       });
     } catch (err: any) {
-      console.error('Sync error:', err);
-      showToast(err.message || 'Failed to sync with Google Drive');
+      console.warn('Sync status:', err);
+
+      if (
+        err instanceof AuthExpiredError ||
+        err.name === 'AuthExpiredError' ||
+        err.message?.includes('session has expired') ||
+        err.message?.includes('Not authenticated')
+      ) {
+        setToken(null);
+        showToast('Google Drive session expired. Please sign in again.', 'error');
+      } else {
+        // Fallback to cache if available
+        const cached = getCachedStructure();
+        if (cached.subjects.length > 0) {
+          setSubjects((cur) => (cur.length === 0 ? cached.subjects : cur));
+          if (cached.rootFolderId) setRootFolderId(cached.rootFolderId);
+          if (!quiet) {
+            showToast('Showing cached study files. Tap Sync to retry connection.', 'info');
+          }
+        } else {
+          showToast(err.message || 'Sync with Google Drive interrupted. Tap Sync to retry.', 'error');
+        }
+      }
     } finally {
       if (!quiet) setIsSyncing(false);
     }
@@ -327,55 +359,6 @@ export default function App() {
     }
   };
 
-  // Log study time session
-  const handleLogStudySession = async (
-    topicId: string,
-    minutes: number,
-    date: string,
-    notes?: string
-  ) => {
-    try {
-      let targetTopic: TopicItem | null = null;
-      for (const s of subjects) {
-        const found = s.topics.find((t) => t.id === topicId);
-        if (found) {
-          targetTopic = found;
-          break;
-        }
-      }
-      if (!targetTopic) return;
-
-      const newEntry = {
-        id: 'session_' + Date.now(),
-        date,
-        minutes,
-        completed: true,
-        notes,
-      };
-
-      const updatedHistory = [...(targetTopic.settings.history || []), newEntry];
-      const updatedTotalMinutes = (targetTopic.settings.totalStudyMinutes || 0) + minutes;
-
-      const updatedSettings: RevisionSettings = {
-        ...targetTopic.settings,
-        totalStudyMinutes: updatedTotalMinutes,
-        history: updatedHistory,
-      };
-
-      await saveTopicSettings(topicId, updatedSettings);
-
-      setSubjects((prev) =>
-        prev.map((s) => ({
-          ...s,
-          topics: s.topics.map((t) => (t.id === topicId ? { ...t, settings: updatedSettings } : t)),
-        }))
-      );
-      showToast(`Logged ${minutes} mins study session!`);
-    } catch (err: any) {
-      showToast(err.message || 'Failed to log study session');
-    }
-  };
-
   // Upload file (up to 200MB!)
   const handleUploadFile = async (
     topicId: string,
@@ -543,6 +526,83 @@ export default function App() {
     }
   };
 
+  // Handle closing the preview modal and logging the study session
+  const handleClosePreview = async (minutes: number) => {
+    if (!previewFile) {
+      setPreviewFile(null);
+      return;
+    }
+
+    // Find the topic this file belongs to
+    let targetTopic: TopicItem | null = null;
+    let targetSubject: SubjectItem | null = null;
+
+    for (const s of subjects) {
+      for (const t of s.topics) {
+        if (t.files.some(f => f.id === previewFile.id)) {
+          targetTopic = t;
+          targetSubject = s;
+          break;
+        }
+      }
+      if (targetTopic) break;
+    }
+
+    if (targetTopic && targetSubject) {
+      const todayStr = new Date().toISOString().split('T')[0];
+      const newLogEntry: RevisionLogEntry = {
+        id: 'study_' + Date.now(),
+        date: todayStr,
+        completed: true,
+        minutes: minutes,
+        notes: `Studied PDF: ${previewFile.name}`,
+      };
+
+      const updatedSettings: RevisionSettings = {
+        ...targetTopic.settings,
+        totalStudyMinutes: (targetTopic.settings.totalStudyMinutes || 0) + minutes,
+        history: [...(targetTopic.settings.history || []), newLogEntry],
+      };
+
+      // Update state immediately
+      setSubjects(prev => prev.map(s => ({
+        ...s,
+        topics: s.topics.map(t => t.id === targetTopic!.id ? { ...t, settings: updatedSettings } : t)
+      })));
+
+      // Save to Drive
+      try {
+        await saveTopicSettings(targetTopic.id, updatedSettings);
+        showToast(`Logged ${minutes} minutes of study time!`, 'success');
+      } catch (err) {
+        console.error('Failed to save study session:', err);
+      }
+    }
+
+    setPreviewFile(null);
+  };
+
+  const handleUpdateTopicRevisionDate = async (date: string) => {
+    if (!previewFile) return;
+
+    let targetTopic: TopicItem | null = null;
+    for (const s of subjects) {
+      const found = s.topics.find(t => t.files.some(f => f.id === previewFile.id));
+      if (found) {
+        targetTopic = found;
+        break;
+      }
+    }
+
+    if (targetTopic) {
+      const updatedSettings: RevisionSettings = {
+        ...targetTopic.settings,
+        nextRevisionDate: date
+      };
+      await handleUpdateTopicSettings(targetTopic.id, updatedSettings);
+    }
+  };
+
   // Compute selected topic
   let currentTopic: TopicItem | null = null;
   for (const s of subjects) {
@@ -577,7 +637,7 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen bg-zinc-100 dark:bg-zinc-950 text-zinc-900 dark:text-zinc-100 flex flex-col font-sans antialiased">
+    <div className="min-h-screen bg-[#FDFBF7] text-zinc-900 flex flex-col font-sans antialiased selection:bg-indigo-100">
       {/* Navbar */}
       <Navbar
         user={user}
@@ -589,6 +649,7 @@ export default function App() {
         revisionsDueCount={dueCount}
         onOpenPlanner={() => setActiveView('planner')}
         onOpenDashboard={() => setActiveView('dashboard')}
+        onOpenToday={() => setActiveView('today')}
       />
 
       {/* Main Content Area */}
@@ -598,8 +659,13 @@ export default function App() {
           subjects={subjects}
           selectedTopic={currentTopic}
           onSelectTopic={(t) => {
-            setSelectedTopicId(t.id);
-            setActiveView('topic');
+            const pdfFiles = t.files.filter(f => f.mimeType.includes('pdf') || f.name.toLowerCase().endsWith('.pdf'));
+            if (pdfFiles.length > 0) {
+              setPreviewFile(pdfFiles[0]);
+            } else {
+              setSelectedTopicId(t.id);
+              setActiveView('topic');
+            }
           }}
           onCreateSubject={handleCreateSubject}
           onCreateTopic={handleCreateTopic}
@@ -612,14 +678,35 @@ export default function App() {
         />
 
         {/* Center / Right Content Panel */}
-        <main className="flex-1 flex flex-col bg-zinc-50 dark:bg-zinc-900/60 overflow-hidden">
+        <main className="flex-1 flex flex-col bg-white/40 backdrop-blur-3xl overflow-hidden border-l border-zinc-200/50">
           {activeView === 'dashboard' ? (
             <StudyDashboard
               subjects={subjects}
-              onLogStudySession={handleLogStudySession}
               onSelectTopic={(t) => {
+                const pdfFiles = t.files.filter(f => f.mimeType.includes('pdf') || f.name.toLowerCase().endsWith('.pdf'));
+                if (pdfFiles.length > 0) {
+                  setPreviewFile(pdfFiles[0]);
+                } else {
+                  setSelectedTopicId(t.id);
+                  setActiveView('topic');
+                }
+              }}
+              onManageTopic={(t) => {
                 setSelectedTopicId(t.id);
                 setActiveView('topic');
+              }}
+            />
+          ) : activeView === 'today' ? (
+            <TodayRevision
+              subjects={subjects}
+              onSelectTopic={(t) => {
+                const pdfFiles = t.files.filter(f => f.mimeType.includes('pdf') || f.name.toLowerCase().endsWith('.pdf'));
+                if (pdfFiles.length > 0) {
+                  setPreviewFile(pdfFiles[0]);
+                } else {
+                  setSelectedTopicId(t.id);
+                  setActiveView('topic');
+                }
               }}
             />
           ) : activeView === 'planner' ? (
@@ -639,18 +726,19 @@ export default function App() {
               onUploadFile={handleUploadFile}
               onDeleteFile={handleDeleteFile}
               onPreviewFile={(f) => setPreviewFile(f)}
+              onRenameTopic={(t) => openRenameModal(t, 'topic')}
               isSavingSettings={isSavingSettings}
             />
           ) : (
             <div className="flex-1 flex items-center justify-center p-8 text-center">
               <div className="max-w-md">
-                <div className="w-16 h-16 mx-auto rounded-3xl bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 flex items-center justify-center mb-4 shadow-xs">
+                <div className="w-16 h-16 mx-auto rounded-3xl bg-indigo-50 text-indigo-600 flex items-center justify-center mb-4 shadow-xs">
                   <BookOpen className="w-8 h-8" />
                 </div>
-                <h2 className="text-xl font-bold text-zinc-900 dark:text-zinc-100">
+                <h2 className="text-xl font-black text-zinc-900 uppercase tracking-tight">
                   Select or Create a Topic
                 </h2>
-                <p className="mt-2 text-xs text-zinc-500 dark:text-zinc-400 leading-relaxed">
+                <p className="mt-2 text-[10px] font-black text-zinc-400 uppercase tracking-widest leading-relaxed">
                   Choose a subject and topic from the left sidebar to upload PDFs up to 200MB, adjust revision intervals, and sync with your Google Calendar and Tasks.
                 </p>
               </div>
@@ -661,7 +749,16 @@ export default function App() {
 
       {/* Global Toast */}
       {toastMessage && (
-        <div className="fixed bottom-6 right-6 z-50 bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 px-4 py-3 rounded-2xl shadow-xl text-xs font-medium flex items-center gap-2 animate-in slide-in-from-bottom-5 duration-200">
+        <div className={`fixed bottom-6 right-6 z-[60] px-5 py-3.5 rounded-[1.25rem] shadow-2xl text-[11px] font-black uppercase tracking-widest flex items-center gap-3 animate-in slide-in-from-right-5 fade-in duration-300 ${
+          toastType === 'error' 
+            ? 'bg-rose-600 text-white shadow-rose-200' 
+            : toastType === 'success'
+            ? 'bg-emerald-600 text-white shadow-emerald-200'
+            : 'bg-zinc-900 text-white shadow-zinc-200'
+        }`}>
+          {toastType === 'error' && <AlertCircle className="w-4 h-4" />}
+          {toastType === 'success' && <CheckCircle2 className="w-4 h-4" />}
+          {toastType === 'info' && <Info className="w-4 h-4" />}
           <span>{toastMessage}</span>
         </div>
       )}
@@ -680,33 +777,33 @@ export default function App() {
 
       {/* Rename Item Modal */}
       {renameModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4">
-          <div className="w-full max-w-sm bg-white dark:bg-zinc-900 rounded-2xl shadow-2xl border border-zinc-200 dark:border-zinc-800 p-6 space-y-4">
-            <h3 className="text-base font-semibold text-zinc-900 dark:text-zinc-100">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-900/60 backdrop-blur-sm p-4">
+          <div className="w-full max-w-sm bg-white rounded-3xl shadow-2xl border border-zinc-200 p-8 space-y-6">
+            <h3 className="text-sm font-black text-zinc-900 uppercase tracking-[0.2em]">
               Rename {renameModal.itemType === 'subject' ? 'Subject' : 'Topic'}
             </h3>
-            <form onSubmit={handleSaveRename} className="space-y-4">
+            <form onSubmit={handleSaveRename} className="space-y-6">
               <input
                 type="text"
                 autoFocus
                 value={renameInputValue}
                 onChange={(e) => setRenameInputValue(e.target.value)}
-                className="w-full text-xs px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl text-zinc-800 dark:text-zinc-200 focus:outline-hidden focus:ring-2 focus:ring-indigo-500/20"
+                className="w-full text-xs font-black px-4 py-3 bg-zinc-50 border border-zinc-200 rounded-2xl text-zinc-900 focus:outline-hidden focus:ring-2 focus:ring-indigo-500/20 uppercase tracking-widest"
               />
-              <div className="flex items-center justify-end gap-2">
+              <div className="flex items-center justify-end gap-4">
                 <button
                   type="button"
                   onClick={() => setRenameModal(null)}
-                  className="px-3 py-1.5 text-xs text-zinc-500 hover:text-zinc-700"
+                  className="text-[10px] font-black text-zinc-400 hover:text-zinc-900 uppercase tracking-widest transition-colors"
                 >
                   Cancel
                 </button>
                 <button
                   type="submit"
                   disabled={!renameInputValue.trim()}
-                  className="px-3.5 py-1.5 text-xs font-medium bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl disabled:opacity-50"
+                  className="px-6 py-2.5 text-[10px] font-black bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl disabled:opacity-50 uppercase tracking-widest shadow-lg shadow-indigo-100 transition-all active:scale-95"
                 >
-                  Save Name
+                  Save Changes
                 </button>
               </div>
             </form>
@@ -717,7 +814,10 @@ export default function App() {
       {/* File Preview Modal */}
       <FilePreviewModal
         file={previewFile}
-        onClose={() => setPreviewFile(null)}
+        topic={subjects.flatMap(s => s.topics).find(t => t.files.some(f => f.id === previewFile?.id)) || null}
+        onClose={handleClosePreview}
+        onFileChange={(f) => setPreviewFile(f)}
+        onUpdateRevisionDate={handleUpdateTopicRevisionDate}
       />
     </div>
   );

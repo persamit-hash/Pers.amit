@@ -136,20 +136,18 @@ export const RevisionSection: React.FC<RevisionSectionProps> = ({
     const newLog: RevisionLogEntry = {
       id: 'rev_' + Date.now(),
       date: todayStr,
-      minutes: 45,
       completed: true,
+      minutes: 0,
       notes: `Completed revision #${nextCount}`,
     };
 
     const updatedHistory = [...(topic.settings.history || []), newLog];
-    const updatedTotalMinutes = (topic.settings.totalStudyMinutes || 0) + 45;
 
     const updated: RevisionSettings = {
       ...topic.settings,
       revisionCount: nextCount,
       lastRevisedAt: todayStr,
       nextRevisionDate: computedNextDate,
-      totalStudyMinutes: updatedTotalMinutes,
       history: updatedHistory,
     };
 
@@ -168,98 +166,100 @@ export const RevisionSection: React.FC<RevisionSectionProps> = ({
   };
 
   return (
-    <div className="flex-1 overflow-y-auto p-4 sm:p-8 max-w-6xl mx-auto space-y-6">
+    <div className="flex-1 overflow-y-auto p-5 sm:p-10 max-w-6xl mx-auto space-y-10">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-zinc-200 dark:border-zinc-800">
-        <div>
-          <div className="flex items-center gap-2 mb-1">
-            <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full bg-indigo-50 dark:bg-indigo-950/80 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800">
-              Revision Hub
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-8 pb-10 border-b border-zinc-200/50">
+        <div className="space-y-4">
+          <div className="flex items-center gap-3">
+            <span className="text-[10px] font-black uppercase tracking-[0.3em] px-4 py-1.5 rounded-full bg-emerald-100 text-emerald-700 border border-emerald-200">
+              Orbital Planner
             </span>
           </div>
-          <h1 className="text-2xl sm:text-3xl font-extrabold text-zinc-900 dark:text-zinc-100 flex items-center gap-2.5">
-            <CalendarDays className="w-7 h-7 text-indigo-600 dark:text-indigo-400" />
-            <span>All Revisions &amp; Schedule</span>
+          <h1 className="text-4xl font-black text-zinc-900 flex items-center gap-5 tracking-tight">
+            <div className="p-4 bg-emerald-600 text-white rounded-3xl shadow-lg shadow-emerald-200 shrink-0">
+              <CalendarDays className="w-8 h-8" />
+            </div>
+            <span>Revision Timeline</span>
           </h1>
-          <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">
-            Detailed tracking showing previous revision dates, upcoming due dates, and spaced repetition intervals.
+          <p className="text-[11px] font-black text-zinc-500 uppercase tracking-[0.2em] max-w-lg leading-relaxed">
+            Architecting long-term retention through high-fidelity performance tracking and adaptive scheduling.
           </p>
         </div>
 
         {/* View Switcher: Cards vs Table */}
-        <div className="flex items-center gap-2">
-          <div className="flex items-center bg-zinc-200/60 dark:bg-zinc-800/70 p-1 rounded-xl">
+        <div className="flex items-center gap-3">
+          <div className="flex items-center bg-white p-1.5 rounded-2xl border border-zinc-200 shadow-sm">
             <button
               onClick={() => setViewMode('cards')}
-              className={`p-1.5 rounded-lg text-xs flex items-center gap-1.5 transition-all ${
+              className={`px-4 py-2 rounded-xl text-xs flex items-center gap-2 transition-all font-black uppercase tracking-widest ${
                 viewMode === 'cards'
-                  ? 'bg-white dark:bg-zinc-700 text-zinc-900 dark:text-zinc-100 font-semibold shadow-2xs'
-                  : 'text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-200'
+                  ? 'bg-zinc-900 text-white shadow-lg scale-[1.02]'
+                  : 'text-zinc-400 hover:text-zinc-900 hover:bg-zinc-50'
               }`}
             >
               <LayoutGrid className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">Card Grid</span>
+              <span className="hidden sm:inline">Grid</span>
             </button>
             <button
               onClick={() => setViewMode('table')}
-              className={`p-1.5 rounded-lg text-xs flex items-center gap-1.5 transition-all ${
+              className={`px-4 py-2 rounded-xl text-xs flex items-center gap-2 transition-all font-black uppercase tracking-widest ${
                 viewMode === 'table'
-                  ? 'bg-white dark:bg-zinc-700 text-zinc-900 dark:text-zinc-100 font-semibold shadow-2xs'
-                  : 'text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-200'
+                  ? 'bg-zinc-900 text-white shadow-lg scale-[1.02]'
+                  : 'text-zinc-400 hover:text-zinc-900 hover:bg-zinc-50'
               }`}
             >
               <TableIcon className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">Timeline Table</span>
+              <span className="hidden sm:inline">Linear</span>
             </button>
           </div>
         </div>
       </div>
 
       {/* KPI Metric Summary Badges */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <div className="p-3.5 bg-white dark:bg-zinc-800/80 rounded-2xl border border-zinc-200 dark:border-zinc-700/80 shadow-2xs flex items-center gap-3">
-          <div className="p-2.5 bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 rounded-xl shrink-0">
-            <BookOpen className="w-4 h-4" />
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-6">
+        <div className="p-8 bg-white rounded-[2.5rem] border border-zinc-200 shadow-sm flex items-center gap-6 group hover:bg-zinc-50 transition-all">
+          <div className="p-4 bg-indigo-50 text-indigo-600 rounded-[1.25rem] border border-indigo-100 group-hover:scale-110 transition-transform">
+            <BookOpen className="w-6 h-6" />
           </div>
           <div>
-            <p className="text-[11px] text-zinc-500 font-medium">All Topics</p>
-            <p className="text-lg font-bold text-zinc-900 dark:text-zinc-100 font-mono">
+            <p className="text-[10px] font-black text-zinc-400 uppercase tracking-[0.2em]">Total Base</p>
+            <p className="text-3xl font-black text-zinc-900 font-mono tabular-nums tracking-tighter mt-1">
               {allTopicRows.length}
             </p>
           </div>
         </div>
 
-        <div className="p-3.5 bg-white dark:bg-zinc-800/80 rounded-2xl border border-zinc-200 dark:border-zinc-700/80 shadow-2xs flex items-center gap-3">
-          <div className="p-2.5 bg-amber-50 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400 rounded-xl shrink-0">
-            <AlertCircle className="w-4 h-4" />
+        <div className="p-8 bg-white rounded-[2.5rem] border border-zinc-200 shadow-sm flex items-center gap-6 group hover:bg-zinc-50 transition-all">
+          <div className="p-4 bg-amber-50 text-amber-600 rounded-[1.25rem] border border-amber-100 group-hover:scale-110 transition-transform">
+            <AlertCircle className="w-6 h-6" />
           </div>
           <div>
-            <p className="text-[11px] text-zinc-500 font-medium">Due / Overdue</p>
-            <p className="text-lg font-bold text-amber-600 dark:text-amber-400 font-mono">
+            <p className="text-[10px] font-black text-zinc-400 uppercase tracking-[0.2em]">Immediate</p>
+            <p className="text-3xl font-black text-amber-600 font-mono tabular-nums tracking-tighter mt-1">
               {stats.dueToday + stats.overdue}
             </p>
           </div>
         </div>
 
-        <div className="p-3.5 bg-white dark:bg-zinc-800/80 rounded-2xl border border-zinc-200 dark:border-zinc-700/80 shadow-2xs flex items-center gap-3">
-          <div className="p-2.5 bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 rounded-xl shrink-0">
-            <Clock className="w-4 h-4" />
+        <div className="p-8 bg-white rounded-[2.5rem] border border-zinc-200 shadow-sm flex items-center gap-6 group hover:bg-zinc-50 transition-all">
+          <div className="p-4 bg-blue-50 text-blue-600 rounded-[1.25rem] border border-blue-100 group-hover:scale-110 transition-transform">
+            <Clock className="w-6 h-6" />
           </div>
           <div>
-            <p className="text-[11px] text-zinc-500 font-medium">Coming This Week</p>
-            <p className="text-lg font-bold text-blue-600 dark:text-blue-400 font-mono">
+            <p className="text-[10px] font-black text-zinc-400 uppercase tracking-[0.2em]">7D Window</p>
+            <p className="text-3xl font-black text-blue-600 font-mono tabular-nums tracking-tighter mt-1">
               {stats.upcomingThisWeek}
             </p>
           </div>
         </div>
 
-        <div className="p-3.5 bg-white dark:bg-zinc-800/80 rounded-2xl border border-zinc-200 dark:border-zinc-700/80 shadow-2xs flex items-center gap-3">
-          <div className="p-2.5 bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 rounded-xl shrink-0">
-            <CheckCircle2 className="w-4 h-4" />
+        <div className="p-8 bg-white rounded-[2.5rem] border border-zinc-200 shadow-sm flex items-center gap-6 group hover:bg-zinc-50 transition-all">
+          <div className="p-4 bg-emerald-50 text-emerald-600 rounded-[1.25rem] border border-emerald-100 group-hover:scale-110 transition-transform">
+            <CheckCircle2 className="w-6 h-6" />
           </div>
           <div>
-            <p className="text-[11px] text-zinc-500 font-medium">Revised at least once</p>
-            <p className="text-lg font-bold text-emerald-600 dark:text-emerald-400 font-mono">
+            <p className="text-[10px] font-black text-zinc-400 uppercase tracking-[0.2em]">Processed</p>
+            <p className="text-3xl font-black text-emerald-600 font-mono tabular-nums tracking-tighter mt-1">
               {stats.completedCount}
             </p>
           </div>
@@ -267,269 +267,180 @@ export const RevisionSection: React.FC<RevisionSectionProps> = ({
       </div>
 
       {/* Filter and Search Bar Controls */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-2 bg-white dark:bg-zinc-800/80 rounded-2xl border border-zinc-200 dark:border-zinc-700/80 shadow-2xs">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6 p-3 bg-white rounded-[2rem] border border-zinc-200 shadow-sm">
         {/* Search Input */}
         <div className="relative flex-1 max-w-sm">
-          <Search className="w-3.5 h-3.5 absolute left-3 top-2.5 text-zinc-400" />
+          <Search className="w-4 h-4 absolute left-4 top-3 text-zinc-400" />
           <input
             type="text"
-            placeholder="Search by topic or subject..."
+            placeholder="Query knowledge base..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="w-full pl-8 pr-3 py-1.5 text-xs bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-xl focus:outline-hidden text-zinc-800 dark:text-zinc-200"
+            className="w-full pl-10 pr-4 py-2.5 text-xs bg-zinc-50 border border-zinc-200 rounded-xl focus:outline-hidden focus:ring-1 focus:ring-indigo-500/30 transition-all text-zinc-900 placeholder:text-zinc-300 font-black uppercase tracking-widest"
           />
         </div>
 
         {/* Filter Tabs */}
-        <div className="flex items-center gap-1 overflow-x-auto p-0.5">
+        <div className="flex items-center gap-2 overflow-x-auto p-1 no-scrollbar">
           <button
             onClick={() => setFilter('all')}
-            className={`px-3 py-1.5 rounded-xl text-xs font-medium transition-all shrink-0 ${
+            className={`px-6 py-2.5 rounded-xl text-[10px] font-black transition-all shrink-0 uppercase tracking-[0.2em] ${
               filter === 'all'
-                ? 'bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 font-semibold shadow-2xs'
-                : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900'
+                ? 'bg-zinc-900 text-white shadow-lg'
+                : 'text-zinc-400 hover:text-zinc-900 hover:bg-zinc-50'
             }`}
           >
-            All ({allTopicRows.length})
+            Universal ({allTopicRows.length})
           </button>
           <button
             onClick={() => setFilter('due')}
-            className={`px-3 py-1.5 rounded-xl text-xs font-medium transition-all shrink-0 ${
+            className={`px-6 py-2.5 rounded-xl text-[10px] font-black transition-all shrink-0 uppercase tracking-[0.2em] ${
               filter === 'due'
-                ? 'bg-amber-500 text-white font-semibold shadow-2xs'
-                : 'text-zinc-600 dark:text-zinc-400 hover:text-amber-600'
+                ? 'bg-amber-600 text-white shadow-lg shadow-amber-100'
+                : 'text-zinc-400 hover:text-amber-600 hover:bg-amber-50'
             }`}
           >
-            Due / Overdue ({stats.dueToday + stats.overdue})
+            Due ({stats.dueToday + stats.overdue})
           </button>
           <button
             onClick={() => setFilter('upcoming')}
-            className={`px-3 py-1.5 rounded-xl text-xs font-medium transition-all shrink-0 ${
+            className={`px-6 py-2.5 rounded-xl text-[10px] font-black transition-all shrink-0 uppercase tracking-[0.2em] ${
               filter === 'upcoming'
-                ? 'bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 font-semibold shadow-2xs'
-                : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900'
+                ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-100'
+                : 'text-zinc-400 hover:text-indigo-600 hover:bg-indigo-50'
             }`}
           >
             Upcoming
           </button>
           <button
             onClick={() => setFilter('completed')}
-            className={`px-3 py-1.5 rounded-xl text-xs font-medium transition-all shrink-0 ${
+            className={`px-6 py-2.5 rounded-xl text-[10px] font-black transition-all shrink-0 uppercase tracking-[0.2em] ${
               filter === 'completed'
-                ? 'bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 font-semibold shadow-2xs'
-                : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900'
+                ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-100'
+                : 'text-zinc-400 hover:text-emerald-600 hover:bg-emerald-50'
             }`}
           >
-            Completed ({stats.completedCount})
+            Finalized ({stats.completedCount})
           </button>
         </div>
       </div>
 
       {/* Main Content Area */}
       {filteredRows.length === 0 ? (
-        <div className="text-center py-16 bg-white dark:bg-zinc-800/60 rounded-2xl border border-zinc-200 dark:border-zinc-800 space-y-2">
-          <CheckCircle2 className="w-10 h-10 mx-auto text-emerald-500 mb-1" />
-          <h3 className="text-base font-bold text-zinc-800 dark:text-zinc-200">
-            No revision items found
+        <div className="text-center py-24 bg-white rounded-[3rem] border border-zinc-200 shadow-sm space-y-4">
+          <div className="w-20 h-20 bg-emerald-50 text-emerald-600 rounded-full flex items-center justify-center mx-auto mb-4 border border-emerald-100">
+            <CheckCircle2 className="w-10 h-10" />
+          </div>
+          <h3 className="text-xl font-black text-zinc-900 tracking-tight">
+            Sync Complete
           </h3>
-          <p className="text-xs text-zinc-500 max-w-sm mx-auto">
+          <p className="text-xs text-zinc-400 font-black uppercase tracking-widest max-w-sm mx-auto">
             {searchQuery
-              ? `No subjects or topics match "${searchQuery}".`
-              : 'You are all caught up with your revision schedule!'}
+              ? `No entities matching "${searchQuery}" in local storage.`
+              : 'Quantum schedule clear. You are performing at peak efficiency.'}
           </p>
         </div>
       ) : viewMode === 'cards' ? (
         /* CARD GRID VIEW */
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {filteredRows.map(({ topic, subject }) => {
             const status = getRevisionStatus(topic.settings.nextRevisionDate);
-            const freqLabel = FREQUENCY_LABELS[topic.settings.frequency || 'spaced_repetition'];
-            const intervalDays = getIntervalDays(
-              topic.settings.frequency || 'spaced_repetition',
-              topic.settings.revisionCount || 0,
-              topic.settings.customDays
-            );
-            const isHistoryOpen = expandedHistoryTopicId === topic.id;
             const isEditingDate = editingDateTopicId === topic.id;
 
             return (
               <div
                 key={topic.id}
-                className="p-5 bg-white dark:bg-zinc-800/80 rounded-2xl border border-zinc-200 dark:border-zinc-700/80 shadow-xs hover:shadow-md transition-all flex flex-col justify-between space-y-4"
+                className="group relative p-8 bg-white border border-zinc-200 rounded-[2.5rem] transition-all duration-500 hover:bg-zinc-50 hover:scale-[1.02] hover:shadow-xl flex flex-col justify-between overflow-hidden"
               >
                 <div>
-                  {/* Subject and Status Pill */}
-                  <div className="flex items-center justify-between gap-2 mb-2">
-                    <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md bg-indigo-50 dark:bg-indigo-950/80 text-indigo-700 dark:text-indigo-300 border border-indigo-200/80 dark:border-indigo-800/80 truncate">
-                      {subject.name}
-                    </span>
-
-                    {status === 'due_today' && (
-                      <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-200 border border-amber-300 dark:border-amber-800 animate-pulse">
-                        Due Today!
-                      </span>
-                    )}
-                    {status === 'overdue' && (
-                      <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-red-100 dark:bg-red-950 text-red-800 dark:text-red-200 border border-red-300 dark:border-red-800">
-                        Overdue ({formatRelativeDate(topic.settings.nextRevisionDate, true)})
-                      </span>
-                    )}
-                    {status === 'upcoming' && (
-                      <span className="px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-200 border border-emerald-300 dark:border-emerald-800">
-                        {formatRelativeDate(topic.settings.nextRevisionDate, true)}
-                      </span>
-                    )}
-                  </div>
-
-                  {/* Title and Revision Round */}
-                  <div className="flex items-start justify-between gap-2">
-                    <h3 className="text-base font-bold text-zinc-900 dark:text-zinc-100">
-                      {topic.name}
-                    </h3>
-                    <span className="text-xs font-bold text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/50 px-2 py-0.5 rounded-md shrink-0">
-                      Round #{topic.settings.revisionCount || 0}
-                    </span>
-                  </div>
-
-                  {/* PROMINENT DATES SECTION: PREVIOUS & NEXT COMING DATES */}
-                  <div className="mt-4 grid grid-cols-2 gap-2.5 p-3 bg-zinc-50 dark:bg-zinc-900/70 rounded-xl border border-zinc-200/70 dark:border-zinc-800">
-                    {/* Previous Revision Date */}
-                    <div className="space-y-0.5">
-                      <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 block">
-                        Previous Revision
-                      </span>
-                      <div className="flex items-center gap-1 text-xs font-semibold text-zinc-800 dark:text-zinc-200">
-                        <History className="w-3.5 h-3.5 text-zinc-400 shrink-0" />
-                        <span className="truncate">
-                          {topic.settings.lastRevisedAt
-                            ? formatDatePretty(topic.settings.lastRevisedAt)
-                            : 'Not yet revised'}
-                        </span>
-                      </div>
-                      <p className="text-[10px] text-zinc-400">
-                        {topic.settings.lastRevisedAt
-                          ? formatRelativeDate(topic.settings.lastRevisedAt, false)
-                          : 'Initial study'}
-                      </p>
+                  {/* Subject and Status */}
+                  <div className="flex items-center justify-between gap-4 mb-8">
+                    <div className="flex items-center gap-3 text-[10px] font-black text-zinc-400 uppercase tracking-[0.2em] truncate">
+                      <span className="text-indigo-600">{subject.name}</span>
+                      <span aria-hidden="true" className="text-zinc-200">/</span>
+                      <span className="text-zinc-500">PHASE {topic.settings.revisionCount || 0}</span>
                     </div>
 
-                    {/* Next Coming Date */}
-                    <div className="space-y-0.5 border-l border-zinc-200 dark:border-zinc-800 pl-3">
-                      <div className="flex items-center justify-between">
-                        <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-600 dark:text-indigo-400 block">
-                          Next Coming Date
+                    <div className="shrink-0">
+                      {status === 'due_today' && (
+                        <span className="px-3 py-1 rounded-full bg-amber-50 text-amber-600 border border-amber-100 text-[9px] font-black uppercase tracking-widest">Due Today</span>
+                      )}
+                      {status === 'overdue' && (
+                        <span className="px-3 py-1 rounded-full bg-rose-50 text-rose-600 border border-rose-100 text-[9px] font-black uppercase tracking-widest">Critical Delay</span>
+                      )}
+                      {status === 'upcoming' && (
+                        <span className="px-3 py-1 rounded-full bg-emerald-50 text-emerald-600 border border-emerald-100 text-[9px] font-black uppercase tracking-widest">
+                          {formatRelativeDate(topic.settings.nextRevisionDate, true)}
                         </span>
+                      )}
+                    </div>
+                  </div>
+
+                  <h3 className="text-2xl font-black text-zinc-900 leading-[1.1] mb-8 group-hover:text-indigo-600 transition-colors tracking-tight">
+                    {topic.name}
+                  </h3>
+
+                  {/* Dates Section */}
+                  <div className="grid grid-cols-2 gap-8 py-6 border-y border-zinc-100">
+                    <div className="space-y-2">
+                      <span className="text-[10px] font-black text-zinc-300 uppercase tracking-widest block">Last Sync</span>
+                      <div className="flex items-center gap-2 text-xs font-black text-zinc-700 font-mono tabular-nums">
+                        {topic.settings.lastRevisedAt ? formatDatePretty(topic.settings.lastRevisedAt) : 'Genesis'}
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] font-black text-zinc-300 uppercase tracking-widest block">Next Window</span>
                         <button
                           onClick={() => {
                             setEditingDateTopicId(isEditingDate ? null : topic.id);
                             setTempNextDate(topic.settings.nextRevisionDate || '');
                           }}
-                          className="text-[10px] text-indigo-600 dark:text-indigo-400 hover:underline"
+                          className="text-[9px] font-black text-indigo-600 hover:text-indigo-800 transition-all uppercase tracking-widest"
                         >
-                          {isEditingDate ? 'Cancel' : 'Edit'}
+                          {isEditingDate ? 'Cancel' : 'Modify'}
                         </button>
                       </div>
 
                       {isEditingDate ? (
-                        <div className="flex items-center gap-1 pt-1">
+                        <div className="flex items-center gap-2 mt-1">
                           <input
                             type="date"
                             value={tempNextDate}
                             onChange={(e) => setTempNextDate(e.target.value)}
-                            className="text-xs p-1 bg-white dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 rounded-md w-full"
+                            className="text-[10px] p-2 bg-white border border-zinc-200 rounded-xl w-full focus:outline-hidden text-zinc-900 font-black"
                           />
                           <button
                             onClick={() => handleSaveReschedule(topic)}
-                            className="px-2 py-1 bg-indigo-600 text-white rounded-md text-[10px] font-bold"
+                            className="p-2 bg-indigo-600 text-white rounded-xl shadow-lg hover:bg-indigo-700 transition-all"
                           >
-                            Save
+                            <Check className="w-4 h-4" />
                           </button>
                         </div>
                       ) : (
-                        <>
-                          <div className="flex items-center gap-1 text-xs font-bold text-zinc-900 dark:text-zinc-100">
-                            <CalendarIcon className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400 shrink-0" />
-                            <span className="truncate">
-                              {formatDatePretty(topic.settings.nextRevisionDate)}
-                            </span>
-                          </div>
-                          <p className="text-[10px] text-indigo-600 dark:text-indigo-400 font-medium">
-                            {formatRelativeDate(topic.settings.nextRevisionDate, true)} (at {topic.settings.reminderTime || '09:00'})
-                          </p>
-                        </>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Frequency & File Info */}
-                  <div className="mt-3 flex items-center justify-between text-xs text-zinc-500">
-                    <div className="flex items-center gap-1.5 truncate pr-2">
-                      <Sliders className="w-3.5 h-3.5 text-zinc-400 shrink-0" />
-                      <span className="truncate">{freqLabel} (+{intervalDays}d)</span>
-                    </div>
-
-                    <button
-                      onClick={() => setExpandedHistoryTopicId(isHistoryOpen ? null : topic.id)}
-                      className="text-[11px] font-medium text-indigo-600 dark:text-indigo-400 hover:underline flex items-center gap-0.5 shrink-0"
-                    >
-                      <span>{(topic.settings.history?.length || 0)} log{(topic.settings.history?.length || 0) !== 1 ? 's' : ''}</span>
-                      {isHistoryOpen ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
-                    </button>
-                  </div>
-
-                  {/* Expanded Revision History Log */}
-                  {isHistoryOpen && (
-                    <div className="mt-3 pt-3 border-t border-zinc-100 dark:border-zinc-800 space-y-1.5 animate-in fade-in duration-150">
-                      <span className="text-[10px] font-bold uppercase tracking-wider text-zinc-400 block mb-1">
-                        Revision History Log
-                      </span>
-                      {(!topic.settings.history || topic.settings.history.length === 0) ? (
-                        <p className="text-[11px] text-zinc-400 italic">No past sessions recorded yet.</p>
-                      ) : (
-                        <div className="space-y-1 max-h-36 overflow-y-auto pr-1">
-                          {topic.settings.history.slice().reverse().map((h) => (
-                            <div
-                              key={h.id}
-                              className="flex items-center justify-between p-2 rounded-lg bg-zinc-50 dark:bg-zinc-900 text-xs"
-                            >
-                              <div className="flex items-center gap-2">
-                                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
-                                <span className="font-semibold text-zinc-800 dark:text-zinc-200">
-                                  {formatDatePretty(h.date)}
-                                </span>
-                                {h.notes && (
-                                  <span className="text-[11px] text-zinc-500 truncate max-w-[150px]">
-                                    • {h.notes}
-                                  </span>
-                                )}
-                              </div>
-                              <span className="text-[11px] font-mono text-zinc-400">
-                                {h.minutes}m
-                              </span>
-                            </div>
-                          ))}
+                        <div className="text-xs font-black text-zinc-900 font-mono tabular-nums">
+                          {formatDatePretty(topic.settings.nextRevisionDate)}
                         </div>
                       )}
                     </div>
-                  )}
+                  </div>
                 </div>
 
                 {/* Bottom Actions */}
-                <div className="flex items-center justify-between pt-3 border-t border-zinc-100 dark:border-zinc-700/60">
+                <div className="mt-10 flex items-center justify-between">
                   <button
                     onClick={() => onSelectTopic(topic)}
-                    className="flex items-center gap-1 text-xs font-semibold text-zinc-700 dark:text-zinc-300 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors"
+                    className="text-[10px] font-black text-zinc-400 hover:text-zinc-900 transition-colors uppercase tracking-[0.2em] flex items-center gap-2 group/btn"
                   >
-                    <span>Open Topic Files ({topic.files.length})</span>
-                    <ArrowRight className="w-3.5 h-3.5" />
+                    Load Modules <ArrowRight className="w-3.5 h-3.5 group-hover/btn:translate-x-1 transition-transform" />
                   </button>
 
                   <button
                     onClick={() => handleQuickComplete(topic)}
-                    className="flex items-center gap-1.5 px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white rounded-xl text-xs font-semibold shadow-2xs active:scale-95 transition-all"
+                    className="px-6 py-3 bg-zinc-100 hover:bg-emerald-600 text-zinc-600 hover:text-white border border-zinc-200 hover:border-emerald-600 rounded-2xl text-[10px] font-black uppercase tracking-[0.2em] transition-all active:scale-95"
                   >
-                    <Check className="w-3.5 h-3.5" />
-                    <span>Done Revision</span>
+                    Log Delta
                   </button>
                 </div>
               </div>
@@ -538,107 +449,107 @@ export const RevisionSection: React.FC<RevisionSectionProps> = ({
         </div>
       ) : (
         /* TIMELINE TABLE VIEW */
-        <div className="bg-white dark:bg-zinc-800/80 rounded-2xl border border-zinc-200 dark:border-zinc-700/80 shadow-xs overflow-hidden">
+        <div className="bg-white rounded-[2.5rem] border border-zinc-200 shadow-sm overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs">
-              <thead className="bg-zinc-50 dark:bg-zinc-900 border-b border-zinc-200 dark:border-zinc-700/80 text-zinc-500 uppercase tracking-wider text-[10px] font-bold">
+              <thead className="bg-zinc-50 border-b border-zinc-200 text-zinc-400 uppercase tracking-[0.2em] text-[10px] font-black">
                 <tr>
-                  <th className="px-4 py-3">Subject &amp; Topic</th>
-                  <th className="px-4 py-3">Round</th>
-                  <th className="px-4 py-3">Previous Revision Date</th>
-                  <th className="px-4 py-3">Next Coming Date</th>
-                  <th className="px-4 py-3">Frequency / Status</th>
-                  <th className="px-4 py-3 text-right">Actions</th>
+                  <th className="px-8 py-5">Module & Entity</th>
+                  <th className="px-8 py-5">Iter</th>
+                  <th className="px-8 py-5">Retrospective</th>
+                  <th className="px-8 py-5">Future Window</th>
+                  <th className="px-8 py-5">Status Core</th>
+                  <th className="px-8 py-5 text-right">Ops</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-zinc-100 dark:divide-zinc-700/60">
+              <tbody className="divide-y divide-zinc-100">
                 {filteredRows.map(({ topic, subject }) => {
                   const status = getRevisionStatus(topic.settings.nextRevisionDate);
 
                   return (
                     <tr
                       key={topic.id}
-                      className="hover:bg-zinc-50 dark:hover:bg-zinc-800 transition-colors"
+                      className="group hover:bg-zinc-50/50 transition-all"
                     >
                       {/* Topic & Subject */}
-                      <td className="px-4 py-3.5 max-w-[200px]">
-                        <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-600 dark:text-indigo-400 block truncate">
+                      <td className="px-8 py-6 max-w-[250px]">
+                        <span className="text-[9px] font-black uppercase tracking-[0.2em] text-indigo-600 block mb-1">
                           {subject.name}
                         </span>
-                        <span className="font-semibold text-zinc-900 dark:text-zinc-100 block truncate">
+                        <span className="text-sm font-black text-zinc-900 block truncate group-hover:text-indigo-600 transition-colors">
                           {topic.name}
                         </span>
                       </td>
 
                       {/* Revision Round */}
-                      <td className="px-4 py-3.5 whitespace-nowrap">
-                        <span className="font-bold text-indigo-600 dark:text-indigo-400 font-mono">
+                      <td className="px-8 py-6 whitespace-nowrap">
+                        <span className="px-3 py-1 rounded-lg bg-indigo-50 text-indigo-600 border border-indigo-100 font-black font-mono">
                           #{topic.settings.revisionCount || 0}
                         </span>
                       </td>
 
                       {/* Previous Revision Date */}
-                      <td className="px-4 py-3.5 whitespace-nowrap">
-                        <div className="flex items-center gap-1.5 text-zinc-700 dark:text-zinc-300">
-                          <History className="w-3.5 h-3.5 text-zinc-400 shrink-0" />
-                          <span className="font-medium">
+                      <td className="px-8 py-6 whitespace-nowrap">
+                        <div className="flex items-center gap-3 text-zinc-600">
+                          <History className="w-4 h-4 text-zinc-300 shrink-0" />
+                          <span className="font-black font-mono tabular-nums">
                             {topic.settings.lastRevisedAt
                               ? formatDatePretty(topic.settings.lastRevisedAt)
-                              : 'Not revised yet'}
+                              : 'NO DATA'}
                           </span>
                         </div>
                         {topic.settings.lastRevisedAt && (
-                          <span className="text-[10px] text-zinc-400">
+                          <span className="text-[10px] text-zinc-300 font-black uppercase tracking-widest block mt-1">
                             {formatRelativeDate(topic.settings.lastRevisedAt, false)}
                           </span>
                         )}
                       </td>
 
                       {/* Next Coming Date */}
-                      <td className="px-4 py-3.5 whitespace-nowrap">
-                        <div className="flex items-center gap-1.5 font-bold text-zinc-900 dark:text-zinc-100">
-                          <CalendarIcon className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400 shrink-0" />
-                          <span>{formatDatePretty(topic.settings.nextRevisionDate)}</span>
+                      <td className="px-8 py-6 whitespace-nowrap">
+                        <div className="flex items-center gap-3 font-black text-zinc-900">
+                          <CalendarIcon className="w-4 h-4 text-indigo-600 shrink-0" />
+                          <span className="font-mono tabular-nums">{formatDatePretty(topic.settings.nextRevisionDate)}</span>
                         </div>
-                        <span className="text-[10px] text-indigo-600 dark:text-indigo-400 font-medium">
+                        <span className="text-[10px] text-indigo-400 font-black uppercase tracking-widest block mt-1">
                           {formatRelativeDate(topic.settings.nextRevisionDate, true)}
                         </span>
                       </td>
 
                       {/* Status */}
-                      <td className="px-4 py-3.5 whitespace-nowrap">
+                      <td className="px-8 py-6 whitespace-nowrap">
                         {status === 'due_today' && (
-                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 dark:bg-amber-950 text-amber-800 dark:text-amber-200 border border-amber-300">
-                            Due Today
+                          <span className="px-3 py-1 rounded-full text-[9px] font-black bg-amber-50 text-amber-600 border border-amber-100 uppercase tracking-widest">
+                            Due Now
                           </span>
                         )}
                         {status === 'overdue' && (
-                          <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-red-100 dark:bg-red-950 text-red-800 dark:text-red-200 border border-red-300">
+                          <span className="px-3 py-1 rounded-full text-[9px] font-black bg-rose-50 text-rose-600 border border-rose-100 uppercase tracking-widest">
                             Overdue
                           </span>
                         )}
                         {status === 'upcoming' && (
-                          <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-emerald-100 dark:bg-emerald-950 text-emerald-800 dark:text-emerald-200">
-                            Upcoming
+                          <span className="px-3 py-1 rounded-full text-[9px] font-black bg-emerald-50 text-emerald-600 border border-emerald-100 uppercase tracking-widest">
+                            Stable
                           </span>
                         )}
                       </td>
 
                       {/* Actions */}
-                      <td className="px-4 py-3.5 text-right whitespace-nowrap">
-                        <div className="flex items-center justify-end gap-2">
+                      <td className="px-8 py-6 text-right whitespace-nowrap">
+                        <div className="flex items-center justify-end gap-3">
                           <button
                             onClick={() => onSelectTopic(topic)}
                             title="Study Topic"
-                            className="p-1.5 text-zinc-500 hover:text-indigo-600 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-700 transition-colors"
+                            className="p-2.5 text-zinc-400 hover:text-zinc-900 rounded-xl hover:bg-zinc-100 transition-all active:scale-95 border border-transparent hover:border-zinc-200"
                           >
                             <ArrowUpRight className="w-4 h-4" />
                           </button>
                           <button
                             onClick={() => handleQuickComplete(topic)}
-                            className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-semibold shadow-2xs"
+                            className="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-md transition-all active:scale-95"
                           >
-                            Done
+                            Mark
                           </button>
                         </div>
                       </td>
@@ -649,7 +560,8 @@ export const RevisionSection: React.FC<RevisionSectionProps> = ({
             </table>
           </div>
         </div>
-      )}
+      )
+      }
     </div>
   );
 };

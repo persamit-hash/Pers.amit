@@ -15,26 +15,25 @@ import {
   CartesianGrid,
 } from 'recharts';
 import {
-  Clock,
   CheckCircle2,
-  Calendar,
   TrendingUp,
   Award,
   AlertCircle,
-  Plus,
   BookOpen,
   Filter,
   BarChart3,
   PieChart as PieIcon,
   Zap,
+  Clock,
 } from 'lucide-react';
 import { SubjectItem, TopicItem, RevisionLogEntry, RevisionSettings } from '../types';
 import { getRevisionStatus } from '../utils/revisionUtils';
+import { D3StudyHeatmap } from './D3StudyHeatmap';
 
 interface StudyDashboardProps {
   subjects: SubjectItem[];
-  onLogStudySession: (topicId: string, minutes: number, date: string, notes?: string) => Promise<void>;
   onSelectTopic: (topic: TopicItem) => void;
+  onManageTopic?: (topic: TopicItem) => void;
 }
 
 const SUBJECT_COLORS = [
@@ -58,28 +57,15 @@ const STATUS_COLORS = {
 
 export const StudyDashboard: React.FC<StudyDashboardProps> = ({
   subjects,
-  onLogStudySession,
   onSelectTopic,
+  onManageTopic,
 }) => {
   const [selectedSubjectId, setSelectedSubjectId] = useState<string>('all');
-  const [isLogModalOpen, setIsLogModalOpen] = useState(false);
-  const [logTopicId, setLogTopicId] = useState<string>('');
-  const [logMinutes, setLogMinutes] = useState<number>(45);
-  const [logDate, setLogDate] = useState<string>(new Date().toISOString().split('T')[0]);
-  const [logNotes, setLogNotes] = useState<string>('');
-  const [isLogging, setIsLogging] = useState(false);
 
   // Flatten all topics
   const allTopics = useMemo(() => {
     return subjects.flatMap((s) => s.topics);
   }, [subjects]);
-
-  // Set default topic for modal
-  React.useEffect(() => {
-    if (!logTopicId && allTopics.length > 0) {
-      setLogTopicId(allTopics[0].id);
-    }
-  }, [allTopics, logTopicId]);
 
   // Generate 30 days array [dateStr...]
   const last30Days = useMemo(() => {
@@ -93,50 +79,30 @@ export const StudyDashboard: React.FC<StudyDashboardProps> = ({
     return dates;
   }, []);
 
-  // Compute subject study time
+  // Compute subject revision data
   const subjectStudyData = useMemo(() => {
     return subjects.map((sub, idx) => {
-      let totalMinutes = 0;
       let totalRevisions = 0;
 
       sub.topics.forEach((t) => {
-        // Collect logged history minutes
-        if (t.settings.history && t.settings.history.length > 0) {
-          t.settings.history.forEach((h) => {
-            if (last30Days.includes(h.date)) {
-              totalMinutes += h.minutes || 0;
-            }
-          });
-        } else if (t.settings.totalStudyMinutes) {
-          totalMinutes += t.settings.totalStudyMinutes;
-        } else {
-          // Estimated time: 45 min per completed revision count
-          const completedCount = t.settings.revisionCount || 0;
-          totalMinutes += completedCount * 45;
-        }
         totalRevisions += t.settings.revisionCount || 0;
       });
-
-      const hours = parseFloat((totalMinutes / 60).toFixed(1));
 
       return {
         id: sub.id,
         name: sub.name,
-        minutes: totalMinutes,
-        hours,
         topicsCount: sub.topics.length,
         totalRevisions,
         color: SUBJECT_COLORS[idx % SUBJECT_COLORS.length],
       };
-    }).sort((a, b) => b.hours - a.hours);
-  }, [subjects, last30Days]);
+    }).sort((a, b) => b.totalRevisions - a.totalRevisions);
+  }, [subjects]);
 
-  // Compute daily revision status & study time over last 30 days
+  // Compute daily revision status over last 30 days
   const dailyTrendData = useMemo(() => {
     return last30Days.map((dateStr) => {
       let completedCount = 0;
       let scheduledCount = 0;
-      let studyHours = 0;
 
       subjects.forEach((sub) => {
         if (selectedSubjectId !== 'all' && sub.id !== selectedSubjectId) return;
@@ -147,14 +113,12 @@ export const StudyDashboard: React.FC<StudyDashboardProps> = ({
             top.settings.history.forEach((h) => {
               if (h.date === dateStr) {
                 if (h.completed) completedCount++;
-                studyHours += (h.minutes || 0) / 60;
               }
             });
           } else {
             // Check last revised date
             if (top.settings.lastRevisedAt === dateStr) {
               completedCount++;
-              studyHours += 0.75; // 45 mins
             }
           }
 
@@ -173,14 +137,12 @@ export const StudyDashboard: React.FC<StudyDashboardProps> = ({
         displayDate: label,
         completed: completedCount,
         scheduled: scheduledCount,
-        studyHours: parseFloat(studyHours.toFixed(1)),
       };
     });
   }, [last30Days, subjects, selectedSubjectId]);
 
   // Overall statistics
   const stats = useMemo(() => {
-    let totalMinutes = 0;
     let completed30d = 0;
     let scheduled30d = 0;
     let overdueCount = 0;
@@ -189,7 +151,6 @@ export const StudyDashboard: React.FC<StudyDashboardProps> = ({
     let masteredCount = 0;
 
     dailyTrendData.forEach((d) => {
-      totalMinutes += d.studyHours * 60;
       completed30d += d.completed;
       scheduled30d += d.scheduled;
     });
@@ -207,6 +168,8 @@ export const StudyDashboard: React.FC<StudyDashboardProps> = ({
       }
     });
 
+    const totalStudyMinutes = allTopics.reduce((acc, t) => acc + (t.settings.totalStudyMinutes || 0), 0);
+
     const completionRate =
       scheduled30d + completed30d > 0
         ? Math.round((completed30d / (scheduled30d + completed30d)) * 100)
@@ -215,7 +178,6 @@ export const StudyDashboard: React.FC<StudyDashboardProps> = ({
     const topSubject = subjectStudyData.length > 0 ? subjectStudyData[0] : null;
 
     return {
-      totalHours: (totalMinutes / 60).toFixed(1),
       completed30d,
       scheduled30d,
       completionRate,
@@ -224,6 +186,7 @@ export const StudyDashboard: React.FC<StudyDashboardProps> = ({
       dueTodayCount,
       upcomingCount,
       masteredCount,
+      totalStudyMinutes,
     };
   }, [dailyTrendData, allTopics, subjectStudyData]);
 
@@ -237,185 +200,182 @@ export const StudyDashboard: React.FC<StudyDashboardProps> = ({
     ].filter((item) => item.value > 0);
   }, [stats]);
 
-  const handleLogSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!logTopicId || logMinutes <= 0) return;
-
-    setIsLogging(true);
-    try {
-      await onLogStudySession(logTopicId, logMinutes, logDate, logNotes);
-      setIsLogModalOpen(false);
-      setLogNotes('');
-    } finally {
-      setIsLogging(false);
-    }
-  };
-
   return (
-    <div className="flex-1 overflow-y-auto p-4 sm:p-8 max-w-6xl mx-auto space-y-6">
+    <div className="flex-1 overflow-y-auto p-4 sm:p-10 max-w-6xl mx-auto space-y-10">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-zinc-200 dark:border-zinc-800">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6 pb-6 border-b border-zinc-200/50">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-bold text-zinc-900 dark:text-zinc-100 flex items-center gap-2.5">
-            <BarChart3 className="w-7 h-7 text-indigo-600 dark:text-indigo-400" />
-            <span>Study &amp; Revision Insights (Last 30 Days)</span>
+          <h1 className="text-3xl font-black text-zinc-900 flex items-center gap-4 tracking-tight">
+            <div className="p-2.5 bg-linear-to-br from-indigo-500 to-purple-600 text-white rounded-2xl shadow-xl shadow-indigo-500/20 shrink-0">
+              <BarChart3 className="w-7 h-7" />
+            </div>
+            <span className="bg-linear-to-r from-zinc-900 via-zinc-800 to-zinc-600 bg-clip-text text-transparent">Learning Analytics</span>
           </h1>
-          <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1">
-            Visual breakdown of time invested per subject and revision completion performance.
+          <p className="text-[10px] font-black text-zinc-400 mt-3 uppercase tracking-[0.3em]">
+            Visual breakdown of your intellectual momentum
           </p>
         </div>
 
         {/* Action Buttons */}
         <div className="flex items-center gap-3">
           {/* Subject Filter */}
-          <div className="flex items-center gap-2 text-xs">
-            <Filter className="w-3.5 h-3.5 text-zinc-400" />
+          <div className="flex items-center gap-3 text-xs bg-white px-4 py-2 rounded-2xl border border-zinc-200 shadow-sm">
+            <Filter className="w-4 h-4 text-zinc-400" />
             <select
               value={selectedSubjectId}
               onChange={(e) => setSelectedSubjectId(e.target.value)}
-              className="px-2.5 py-1.5 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl text-zinc-800 dark:text-zinc-200 text-xs focus:outline-hidden"
+              className="bg-transparent text-zinc-800 text-[11px] font-black uppercase tracking-widest focus:outline-hidden cursor-pointer"
             >
-              <option value="all">All Subjects</option>
+              <option value="all" className="text-zinc-900">All Disciplines</option>
               {subjects.map((s) => (
-                <option key={s.id} value={s.id}>
+                <option key={s.id} value={s.id} className="text-zinc-900">
                   {s.name}
                 </option>
               ))}
             </select>
           </div>
-
-          <button
-            onClick={() => setIsLogModalOpen(true)}
-            className="flex items-center gap-1.5 px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 text-white rounded-xl text-xs font-semibold shadow-xs transition-colors"
-          >
-            <Plus className="w-3.5 h-3.5" />
-            <span>Log Study Time</span>
-          </button>
         </div>
       </div>
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* Total Study Time */}
-        <div className="p-4 bg-white dark:bg-zinc-800/80 rounded-2xl border border-zinc-200 dark:border-zinc-700/80 shadow-2xs">
-          <div className="flex items-center justify-between text-zinc-500 dark:text-zinc-400 mb-2">
-            <span className="text-xs font-medium">Study Time (30d)</span>
-            <div className="p-1.5 bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400 rounded-lg">
-              <Clock className="w-4 h-4" />
-            </div>
-          </div>
-          <div className="text-2xl font-extrabold text-zinc-900 dark:text-zinc-100">
-            {stats.totalHours} <span className="text-sm font-semibold text-zinc-500">hrs</span>
-          </div>
-          <p className="text-[11px] text-zinc-400 mt-1">Across all subjects</p>
-        </div>
-
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
         {/* Revisions Completed */}
-        <div className="p-4 bg-white dark:bg-zinc-800/80 rounded-2xl border border-zinc-200 dark:border-zinc-700/80 shadow-2xs">
-          <div className="flex items-center justify-between text-zinc-500 dark:text-zinc-400 mb-2">
-            <span className="text-xs font-medium">Revisions Done (30d)</span>
-            <div className="p-1.5 bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 rounded-lg">
-              <CheckCircle2 className="w-4 h-4" />
+        <div className="group p-8 bg-white border border-zinc-200 rounded-3xl shadow-sm transition-all duration-500 hover:scale-[1.02] hover:shadow-xl hover:border-indigo-200 relative overflow-hidden">
+          <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/5 blur-3xl -mr-16 -mt-16 group-hover:bg-indigo-500/10 transition-colors" />
+          <div className="flex items-center justify-between text-zinc-400 mb-6">
+            <span className="text-[10px] font-black uppercase tracking-[0.2em] text-indigo-600/60">Efficiency</span>
+            <div className="p-3 bg-indigo-50 rounded-2xl border border-indigo-100">
+              <Zap className="w-5 h-5 text-indigo-600" />
             </div>
           </div>
-          <div className="text-2xl font-extrabold text-zinc-900 dark:text-zinc-100">
-            {stats.completed30d}
+          <div className="text-4xl font-black text-zinc-900 font-mono tabular-nums tracking-tighter">
+            {stats.completionRate}%
           </div>
-          <p className="text-[11px] text-emerald-600 dark:text-emerald-400 mt-1 font-medium">
-            {stats.completionRate}% completion rate
-          </p>
+          <div className="mt-4 flex items-center gap-2 text-[10px] font-black text-emerald-600 uppercase tracking-[0.2em]">
+            <TrendingUp className="w-4 h-4" />
+            <span>{stats.completed30d} Successes</span>
+          </div>
         </div>
 
-        {/* Top Studied Subject */}
-        <div className="p-4 bg-white dark:bg-zinc-800/80 rounded-2xl border border-zinc-200 dark:border-zinc-700/80 shadow-2xs">
-          <div className="flex items-center justify-between text-zinc-500 dark:text-zinc-400 mb-2">
-            <span className="text-xs font-medium">Most Studied Subject</span>
-            <div className="p-1.5 bg-purple-50 dark:bg-purple-950/60 text-purple-600 dark:text-purple-400 rounded-lg">
-              <Award className="w-4 h-4" />
+        {/* Mastered Topics */}
+        <div className="group p-8 bg-white border border-zinc-200 rounded-3xl shadow-sm transition-all duration-500 hover:scale-[1.02] hover:shadow-xl hover:border-fuchsia-200 relative overflow-hidden">
+          <div className="absolute top-0 right-0 w-32 h-32 bg-fuchsia-500/5 blur-3xl -mr-16 -mt-16 group-hover:bg-fuchsia-500/10 transition-colors" />
+          <div className="flex items-center justify-between text-zinc-400 mb-6">
+            <span className="text-[10px] font-black uppercase tracking-[0.2em] text-fuchsia-600/60">Mastery</span>
+            <div className="p-3 bg-fuchsia-50 rounded-2xl border border-fuchsia-100">
+              <Award className="w-5 h-5 text-fuchsia-600" />
             </div>
           </div>
-          <div className="text-xl font-bold text-zinc-900 dark:text-zinc-100 truncate">
-            {stats.topSubject ? stats.topSubject.name : 'None yet'}
+          <div className="text-4xl font-black text-zinc-900 font-mono tabular-nums tracking-tighter">
+            {stats.masteredCount}
           </div>
-          <p className="text-[11px] text-zinc-400 mt-1">
-            {stats.topSubject ? `${stats.topSubject.hours} hrs spent` : 'Start studying!'}
-          </p>
+          <div className="mt-4 text-[10px] font-black text-fuchsia-600/60 uppercase tracking-[0.2em]">
+            Topics Optimized
+          </div>
         </div>
 
-        {/* Schedule Health */}
-        <div className="p-4 bg-white dark:bg-zinc-800/80 rounded-2xl border border-zinc-200 dark:border-zinc-700/80 shadow-2xs">
-          <div className="flex items-center justify-between text-zinc-500 dark:text-zinc-400 mb-2">
-            <span className="text-xs font-medium">Pending Revisions</span>
-            <div className="p-1.5 bg-amber-50 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400 rounded-lg">
-              <AlertCircle className="w-4 h-4" />
+        {/* Priority Items */}
+        <div className="group p-8 bg-white border border-zinc-200 rounded-3xl shadow-sm transition-all duration-500 hover:scale-[1.02] hover:shadow-xl hover:border-rose-200 relative overflow-hidden">
+          <div className="absolute top-0 right-0 w-32 h-32 bg-rose-500/5 blur-3xl -mr-16 -mt-16 group-hover:bg-rose-500/10 transition-colors" />
+          <div className="flex items-center justify-between text-zinc-400 mb-6">
+            <span className="text-[10px] font-black uppercase tracking-[0.2em] text-rose-600/60">Priority</span>
+            <div className="p-3 bg-rose-50 rounded-2xl border border-rose-100">
+              <AlertCircle className="w-5 h-5 text-rose-600" />
             </div>
           </div>
-          <div className="text-2xl font-extrabold text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
-            <span>{stats.dueTodayCount + stats.overdueCount}</span>
+          <div className="flex items-baseline gap-3">
+            <div className="text-4xl font-black text-zinc-900 font-mono tabular-nums tracking-tighter">
+              {stats.dueTodayCount + stats.overdueCount}
+            </div>
             {stats.overdueCount > 0 && (
-              <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-red-100 dark:bg-red-950 text-red-700 dark:text-red-300">
-                {stats.overdueCount} overdue
+              <span className="text-[9px] font-black px-2 py-1 rounded-xl bg-rose-100 text-rose-600 border border-rose-200 uppercase tracking-widest animate-pulse">
+                Critical
               </span>
             )}
           </div>
-          <p className="text-[11px] text-zinc-400 mt-1">
-            {stats.dueTodayCount} due today
-          </p>
+          <div className="mt-4 text-[10px] font-black text-amber-600/60 uppercase tracking-[0.2em]">
+            Sessions Pending
+          </div>
+        </div>
+
+        {/* Total Study Effort */}
+        <div className="group p-8 bg-white border border-zinc-200 rounded-3xl shadow-sm transition-all duration-500 hover:scale-[1.02] hover:shadow-xl hover:border-emerald-200 relative overflow-hidden">
+          <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/5 blur-3xl -mr-16 -mt-16 group-hover:bg-emerald-500/10 transition-colors" />
+          <div className="flex items-center justify-between text-zinc-400 mb-6">
+            <span className="text-[10px] font-black uppercase tracking-[0.2em] text-emerald-600/60">Effort</span>
+            <div className="p-3 bg-emerald-50 rounded-2xl border border-emerald-100">
+              <Clock className="w-5 h-5 text-emerald-600" />
+            </div>
+          </div>
+          <div className="text-4xl font-black text-zinc-900 font-mono tabular-nums tracking-tighter">
+            {Math.floor(stats.totalStudyMinutes / 60)}h {stats.totalStudyMinutes % 60}m
+          </div>
+          <div className="mt-4 text-[10px] font-black text-emerald-600/60 uppercase tracking-[0.2em]">
+            Time Dashboard
+          </div>
         </div>
       </div>
 
+      {/* D3.js Study Consistency Heatmap & Weekly Momentum */}
+      <D3StudyHeatmap
+        subjects={subjects}
+        selectedSubjectId={selectedSubjectId}
+      />
+
       {/* Main Charts Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Chart 1: Study Time Spent per Subject */}
-        <div className="p-5 sm:p-6 bg-white dark:bg-zinc-800/80 rounded-2xl border border-zinc-200 dark:border-zinc-700/80 shadow-2xs space-y-4">
+        {/* Chart 1: Revisions per Subject */}
+        <div className="p-8 sm:p-12 bg-white rounded-[3rem] border border-zinc-200 shadow-sm space-y-10">
           <div className="flex items-center justify-between">
             <div>
-              <h3 className="text-base font-bold text-zinc-900 dark:text-zinc-100">
-                Study Time per Subject
+              <h3 className="text-2xl font-black text-zinc-900 uppercase tracking-tight">
+                Subject Mastery
               </h3>
-              <p className="text-xs text-zinc-500 dark:text-zinc-400">
-                Total hours spent in the last 30 days
+              <p className="text-[10px] font-black text-zinc-400 uppercase tracking-[0.2em] mt-2">
+                Revision volume per category
               </p>
             </div>
-            <span className="text-xs font-semibold text-indigo-600 dark:text-indigo-400 font-mono">
-              {stats.totalHours} hrs total
-            </span>
           </div>
 
           <div className="h-72 w-full pt-2">
             {subjectStudyData.length === 0 ? (
               <div className="h-full flex items-center justify-center text-xs text-zinc-400">
-                No subjects found. Create a subject to see study time breakdown.
+                No subjects found. Create a subject to see revision breakdown.
               </div>
             ) : (
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={subjectStudyData} margin={{ top: 10, right: 10, left: -20, bottom: 20 }}>
-                  <CartesianGrid strokeDasharray="3 3" opacity={0.15} />
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2E8F0" />
                   <XAxis
                     dataKey="name"
-                    tick={{ fontSize: 11 }}
+                    tick={{ fontSize: 10, fontWeight: 700, fill: '#94A3B8' }}
+                    axisLine={false}
+                    tickLine={false}
                     angle={-20}
                     textAnchor="end"
                     interval={0}
                   />
-                  <YAxis tick={{ fontSize: 11 }} unit="h" />
+                  <YAxis tick={{ fontSize: 10, fontWeight: 700, fill: '#94A3B8' }} axisLine={false} tickLine={false} />
                   <Tooltip
-                    formatter={(value: any) => [`${value} hours`, 'Study Time']}
+                    formatter={(value: any) => [value, 'Total Revisions']}
                     contentStyle={{
-                      backgroundColor: 'rgba(24, 24, 27, 0.95)',
-                      borderRadius: '12px',
-                      border: 'none',
-                      color: '#fff',
-                      fontSize: '12px',
+                      backgroundColor: '#fff',
+                      borderRadius: '16px',
+                      border: '1px solid #E2E8F0',
+                      boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)',
+                      color: '#1e293b',
+                      fontSize: '11px',
+                      fontWeight: 800,
+                      textTransform: 'uppercase'
                     }}
                   />
                   <Bar
-                    dataKey="hours"
-                    radius={[8, 8, 0, 0]}
+                    dataKey="totalRevisions"
+                    radius={[10, 10, 0, 0]}
                     fill="#6366f1"
                   >
                     {subjectStudyData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={entry.color} />
+                      <Cell key={`cell-${index}`} fill={entry.color} fillOpacity={0.8} />
                     ))}
                   </Bar>
                 </BarChart>
@@ -425,19 +385,16 @@ export const StudyDashboard: React.FC<StudyDashboardProps> = ({
         </div>
 
         {/* Chart 2: Status Breakdown Pie Chart */}
-        <div className="p-5 sm:p-6 bg-white dark:bg-zinc-800/80 rounded-2xl border border-zinc-200 dark:border-zinc-700/80 shadow-2xs space-y-4">
+        <div className="p-8 sm:p-12 bg-white rounded-[3rem] border border-zinc-200 shadow-sm space-y-10">
           <div className="flex items-center justify-between">
             <div>
-              <h3 className="text-base font-bold text-zinc-900 dark:text-zinc-100">
-                Revision Completion Status
+              <h3 className="text-2xl font-black text-zinc-900 uppercase tracking-tight">
+                Current Health
               </h3>
-              <p className="text-xs text-zinc-500 dark:text-zinc-400">
-                Current topic health &amp; mastery level
+              <p className="text-[10px] font-black text-zinc-400 uppercase tracking-[0.2em] mt-2">
+                Retention & schedule distribution
               </p>
             </div>
-            <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 font-mono">
-              {allTopics.length} Topics
-            </span>
           </div>
 
           <div className="h-72 w-full flex items-center justify-center">
@@ -452,26 +409,29 @@ export const StudyDashboard: React.FC<StudyDashboardProps> = ({
                     cy="50%"
                     innerRadius={60}
                     outerRadius={95}
-                    paddingAngle={4}
+                    paddingAngle={6}
                     dataKey="value"
                   >
                     {statusPieData.map((entry, index) => (
-                      <Cell key={`pie-cell-${index}`} fill={entry.color} />
+                      <Cell key={`pie-cell-${index}`} fill={entry.color} stroke="none" fillOpacity={0.9} />
                     ))}
                   </Pie>
                   <Tooltip
                     contentStyle={{
-                      backgroundColor: 'rgba(24, 24, 27, 0.95)',
-                      borderRadius: '12px',
-                      border: 'none',
-                      color: '#fff',
-                      fontSize: '12px',
+                      backgroundColor: '#fff',
+                      borderRadius: '16px',
+                      border: '1px solid #E2E8F0',
+                      boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)',
+                      color: '#1e293b',
+                      fontSize: '11px',
+                      fontWeight: 800,
+                      textTransform: 'uppercase'
                     }}
                   />
                   <Legend
                     verticalAlign="bottom"
                     iconType="circle"
-                    wrapperStyle={{ fontSize: '11px', paddingTop: '10px' }}
+                    wrapperStyle={{ fontSize: '10px', fontWeight: 900, paddingTop: '20px', textTransform: 'uppercase', letterSpacing: '0.1em', color: '#94A3B8' }}
                   />
                 </PieChart>
               </ResponsiveContainer>
@@ -481,26 +441,26 @@ export const StudyDashboard: React.FC<StudyDashboardProps> = ({
       </div>
 
       {/* Chart 3: 30-Day Revision Timeline (Completed vs Scheduled Revisions) */}
-      <div className="p-5 sm:p-6 bg-white dark:bg-zinc-800/80 rounded-2xl border border-zinc-200 dark:border-zinc-700/80 shadow-2xs space-y-4">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+      <div className="p-8 sm:p-12 bg-white rounded-[3rem] border border-zinc-200 shadow-sm space-y-10">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-6">
           <div>
-            <h3 className="text-base font-bold text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
-              <TrendingUp className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
-              <span>Revision Completion Trend &amp; Scheduled Timeline (Last 30 Days)</span>
+            <h3 className="text-2xl font-black text-zinc-900 flex items-center gap-4">
+              <TrendingUp className="w-7 h-7 text-indigo-600" />
+              <span>Velocity Timeline</span>
             </h3>
-            <p className="text-xs text-zinc-500 dark:text-zinc-400">
-              Comparing daily completed revisions vs scheduled revision milestones
+            <p className="text-[10px] font-black text-zinc-400 uppercase tracking-[0.2em] mt-2">
+              Comparing output vs scheduled milestones
             </p>
           </div>
 
-          <div className="flex items-center gap-4 text-xs">
-            <div className="flex items-center gap-1.5">
-              <span className="w-3 h-3 rounded-full bg-emerald-500" />
-              <span className="text-zinc-600 dark:text-zinc-400">Completed Revisions</span>
+          <div className="flex items-center gap-6 text-[10px] font-black uppercase tracking-widest">
+            <div className="flex items-center gap-3">
+              <span className="w-3 h-3 rounded-full bg-emerald-500 shadow-sm" />
+              <span className="text-zinc-500">Output</span>
             </div>
-            <div className="flex items-center gap-1.5">
-              <span className="w-3 h-3 rounded-full bg-indigo-500" />
-              <span className="text-zinc-600 dark:text-zinc-400">Scheduled Milestones</span>
+            <div className="flex items-center gap-3">
+              <span className="w-3 h-3 rounded-full bg-indigo-500 shadow-sm" />
+              <span className="text-zinc-500">Plan</span>
             </div>
           </div>
         </div>
@@ -510,46 +470,51 @@ export const StudyDashboard: React.FC<StudyDashboardProps> = ({
             <AreaChart data={dailyTrendData} margin={{ top: 10, right: 10, left: -25, bottom: 10 }}>
               <defs>
                 <linearGradient id="colorCompleted" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#10b981" stopOpacity={0.4} />
+                  <stop offset="5%" stopColor="#10b981" stopOpacity={0.15} />
                   <stop offset="95%" stopColor="#10b981" stopOpacity={0.0} />
                 </linearGradient>
                 <linearGradient id="colorScheduled" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#6366f1" stopOpacity={0.3} />
+                  <stop offset="5%" stopColor="#6366f1" stopOpacity={0.1} />
                   <stop offset="95%" stopColor="#6366f1" stopOpacity={0.0} />
                 </linearGradient>
               </defs>
-              <CartesianGrid strokeDasharray="3 3" opacity={0.15} />
+              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2E8F0" />
               <XAxis
                 dataKey="displayDate"
-                tick={{ fontSize: 10 }}
+                tick={{ fontSize: 9, fontWeight: 700, fill: '#94A3B8' }}
+                axisLine={false}
+                tickLine={false}
                 interval={4}
               />
-              <YAxis tick={{ fontSize: 10 }} allowDecimals={false} />
+              <YAxis tick={{ fontSize: 9, fontWeight: 700, fill: '#94A3B8' }} axisLine={false} tickLine={false} allowDecimals={false} />
               <Tooltip
                 contentStyle={{
-                  backgroundColor: 'rgba(24, 24, 27, 0.95)',
-                  borderRadius: '12px',
-                  border: 'none',
-                  color: '#fff',
-                  fontSize: '12px',
+                  backgroundColor: '#fff',
+                  borderRadius: '16px',
+                  border: '1px solid #E2E8F0',
+                  boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)',
+                  color: '#1e293b',
+                  fontSize: '11px',
+                  fontWeight: 800,
+                  textTransform: 'uppercase'
                 }}
               />
               <Area
                 type="monotone"
                 dataKey="completed"
-                name="Completed Revisions"
+                name="Completed"
                 stroke="#10b981"
-                strokeWidth={2.5}
+                strokeWidth={3}
                 fillOpacity={1}
                 fill="url(#colorCompleted)"
               />
               <Area
                 type="monotone"
                 dataKey="scheduled"
-                name="Scheduled Revisions"
+                name="Scheduled"
                 stroke="#6366f1"
                 strokeWidth={2}
-                strokeDasharray="4 4"
+                strokeDasharray="5 5"
                 fillOpacity={1}
                 fill="url(#colorScheduled)"
               />
@@ -558,120 +523,71 @@ export const StudyDashboard: React.FC<StudyDashboardProps> = ({
         </div>
       </div>
 
-      {/* Log Study Session Modal */}
-      {isLogModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-in fade-in duration-150">
-          <div className="w-full max-w-md bg-white dark:bg-zinc-900 rounded-2xl shadow-2xl border border-zinc-200 dark:border-zinc-800 p-6 space-y-4">
-            <div className="flex items-center justify-between pb-2 border-b border-zinc-100 dark:border-zinc-800">
-              <h3 className="text-base font-bold text-zinc-900 dark:text-zinc-100 flex items-center gap-2">
-                <Clock className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
-                <span>Log Study Time</span>
-              </h3>
-              <button
-                onClick={() => setIsLogModalOpen(false)}
-                className="text-zinc-400 hover:text-zinc-600 text-xs"
-              >
-                Close
-              </button>
+      {/* Study Topics & Time invested */}
+      <div className="p-8 sm:p-12 bg-white rounded-[3rem] border border-zinc-200 shadow-sm space-y-10">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <div className="p-3 bg-indigo-50 text-indigo-600 rounded-2xl border border-indigo-100">
+              <BookOpen className="w-6 h-6" />
             </div>
-
-            <form onSubmit={handleLogSubmit} className="space-y-4">
-              {/* Topic selector */}
-              <div>
-                <label className="text-xs font-medium text-zinc-700 dark:text-zinc-300 block mb-1">
-                  Select Topic
-                </label>
-                <select
-                  value={logTopicId}
-                  onChange={(e) => setLogTopicId(e.target.value)}
-                  className="w-full text-xs px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl text-zinc-800 dark:text-zinc-200 focus:outline-hidden"
-                >
-                  {allTopics.map((t) => (
-                    <option key={t.id} value={t.id}>
-                      {t.subjectName} → {t.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {/* Study duration presets & input */}
-              <div>
-                <label className="text-xs font-medium text-zinc-700 dark:text-zinc-300 block mb-1">
-                  Duration (Minutes)
-                </label>
-                <div className="grid grid-cols-4 gap-2 mb-2">
-                  {[25, 45, 60, 90].map((mins) => (
-                    <button
-                      key={mins}
-                      type="button"
-                      onClick={() => setLogMinutes(mins)}
-                      className={`py-1.5 text-xs font-semibold rounded-lg border transition-all ${
-                        logMinutes === mins
-                          ? 'bg-indigo-600 text-white border-indigo-600'
-                          : 'bg-zinc-50 dark:bg-zinc-800 border-zinc-200 dark:border-zinc-700 text-zinc-700 dark:text-zinc-300'
-                      }`}
-                    >
-                      {mins}m
-                    </button>
-                  ))}
-                </div>
-                <input
-                  type="number"
-                  min="5"
-                  max="600"
-                  value={logMinutes}
-                  onChange={(e) => setLogMinutes(parseInt(e.target.value, 10) || 0)}
-                  className="w-full text-xs px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl text-zinc-800 dark:text-zinc-200"
-                />
-              </div>
-
-              {/* Date */}
-              <div>
-                <label className="text-xs font-medium text-zinc-700 dark:text-zinc-300 block mb-1">
-                  Study Date
-                </label>
-                <input
-                  type="date"
-                  value={logDate}
-                  onChange={(e) => setLogDate(e.target.value)}
-                  className="w-full text-xs px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl text-zinc-800 dark:text-zinc-200"
-                />
-              </div>
-
-              {/* Notes */}
-              <div>
-                <label className="text-xs font-medium text-zinc-700 dark:text-zinc-300 block mb-1">
-                  Session Notes (Optional)
-                </label>
-                <input
-                  type="text"
-                  placeholder="e.g. Completed Chapter 4 review..."
-                  value={logNotes}
-                  onChange={(e) => setLogNotes(e.target.value)}
-                  className="w-full text-xs px-3 py-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl text-zinc-800 dark:text-zinc-200"
-                />
-              </div>
-
-              <div className="flex items-center justify-end gap-2 pt-2 border-t border-zinc-100 dark:border-zinc-800">
-                <button
-                  type="button"
-                  onClick={() => setIsLogModalOpen(false)}
-                  className="px-3 py-2 text-xs text-zinc-500 hover:text-zinc-700"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={isLogging || !logTopicId || logMinutes <= 0}
-                  className="px-4 py-2 text-xs font-medium bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl disabled:opacity-50"
-                >
-                  {isLogging ? 'Logging...' : 'Save Study Log'}
-                </button>
-              </div>
-            </form>
+            <div>
+              <h3 className="text-2xl font-black text-zinc-900 uppercase tracking-tight">Active Vault</h3>
+              <p className="text-[10px] font-black text-zinc-400 uppercase tracking-[0.2em] mt-1">Invested effort per discipline</p>
+            </div>
           </div>
         </div>
-      )}
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
+          {allTopics.filter(t => selectedSubjectId === 'all' || t.subjectId === selectedSubjectId).map((topic) => (
+            <div
+              key={topic.id}
+              onClick={() => onSelectTopic(topic)}
+              className="group flex flex-col p-8 bg-[#FDFBF7] border border-zinc-200 rounded-3xl hover:border-indigo-300 hover:shadow-xl transition-all duration-500 text-left relative overflow-hidden cursor-pointer"
+            >
+              <div className="flex items-center justify-between mb-6">
+                <div className="flex items-center gap-3 text-[10px] font-black text-zinc-400 uppercase tracking-[0.2em]">
+                  <span className="text-indigo-600">{topic.subjectName}</span>
+                  {onManageTopic && (
+                    <>
+                      <span aria-hidden="true" className="text-zinc-200">/</span>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onManageTopic(topic);
+                        }}
+                        className="hover:text-indigo-600 transition-colors"
+                        title="Manage Topic"
+                      >
+                        Tune
+                      </button>
+                    </>
+                  )}
+                </div>
+                <div className="flex items-center gap-2 text-emerald-600 font-mono tabular-nums text-xs font-black">
+                  <CheckCircle2 className="w-4 h-4" />
+                  <span>{topic.settings.revisionCount}</span>
+                </div>
+              </div>
+              
+              <h4 className="text-xl font-black text-zinc-900 mb-10 group-hover:translate-x-1 transition-transform line-clamp-1 tracking-tight">
+                {topic.name}
+              </h4>
+
+              <div className="mt-auto pt-6 border-t border-zinc-100 flex items-center justify-between">
+                <div className="flex flex-col">
+                  <span className="text-[9px] font-black text-zinc-300 uppercase tracking-[0.3em] mb-1">Time Logged</span>
+                  <span className="text-2xl font-black text-zinc-900 font-mono tabular-nums tracking-tighter">
+                    {Math.floor((topic.settings.totalStudyMinutes || 0) / 60)}h {(topic.settings.totalStudyMinutes || 0) % 60}m
+                  </span>
+                </div>
+                <div className="w-12 h-12 rounded-2xl bg-white border border-zinc-100 flex items-center justify-center text-zinc-300 group-hover:text-indigo-600 group-hover:border-indigo-100 group-hover:shadow-lg transition-all">
+                  <Zap className="w-6 h-6" />
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
     </div>
   );
 };

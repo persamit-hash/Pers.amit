@@ -1,13 +1,30 @@
-import { getAccessToken } from './auth';
+import { getAccessToken, AuthExpiredError, clearCachedAccessToken } from './auth';
 
 async function getAuthHeader(): Promise<Record<string, string>> {
   const token = await getAccessToken();
   if (!token) {
-    throw new Error('Not authenticated. Please sign in with Google.');
+    throw new AuthExpiredError('Not authenticated. Please sign in with Google.');
   }
   return {
     Authorization: `Bearer ${token}`,
   };
+}
+
+async function calendarFetch(url: string, options: RequestInit = {}): Promise<Response> {
+  try {
+    const res = await fetch(url, options);
+    if (res.status === 401) {
+      clearCachedAccessToken();
+      throw new AuthExpiredError();
+    }
+    return res;
+  } catch (err: any) {
+    if (err instanceof AuthExpiredError || err.name === 'AuthExpiredError') throw err;
+    if (err?.name === 'TypeError' || err?.message === 'Load failed' || err?.message === 'Failed to fetch') {
+      throw new Error('Network issue while communicating with Google Calendar.');
+    }
+    throw err;
+  }
 }
 
 export interface CalendarEventPayload {
@@ -56,7 +73,7 @@ export async function createOrUpdateRevisionCalendarEvent(
 
   if (existingEventId) {
     // Try to update existing event
-    const updateRes = await fetch(
+    const updateRes = await calendarFetch(
       `https://www.googleapis.com/calendar/v3/calendars/primary/events/${existingEventId}`,
       {
         method: 'PATCH',
@@ -75,7 +92,7 @@ export async function createOrUpdateRevisionCalendarEvent(
     // If not found or failed, fall through to create new event
   }
 
-  const createRes = await fetch(
+  const createRes = await calendarFetch(
     'https://www.googleapis.com/calendar/v3/calendars/primary/events',
     {
       method: 'POST',
@@ -97,7 +114,7 @@ export async function createOrUpdateRevisionCalendarEvent(
 
 export async function deleteCalendarEvent(eventId: string): Promise<void> {
   const headers = await getAuthHeader();
-  const res = await fetch(
+  const res = await calendarFetch(
     `https://www.googleapis.com/calendar/v3/calendars/primary/events/${eventId}`,
     {
       method: 'DELETE',

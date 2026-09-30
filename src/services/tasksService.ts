@@ -1,13 +1,30 @@
-import { getAccessToken } from './auth';
+import { getAccessToken, AuthExpiredError, clearCachedAccessToken } from './auth';
 
 async function getAuthHeader(): Promise<Record<string, string>> {
   const token = await getAccessToken();
   if (!token) {
-    throw new Error('Not authenticated. Please sign in with Google.');
+    throw new AuthExpiredError('Not authenticated. Please sign in with Google.');
   }
   return {
     Authorization: `Bearer ${token}`,
   };
+}
+
+async function tasksFetch(url: string, options: RequestInit = {}): Promise<Response> {
+  try {
+    const res = await fetch(url, options);
+    if (res.status === 401) {
+      clearCachedAccessToken();
+      throw new AuthExpiredError();
+    }
+    return res;
+  } catch (err: any) {
+    if (err instanceof AuthExpiredError || err.name === 'AuthExpiredError') throw err;
+    if (err?.name === 'TypeError' || err?.message === 'Load failed' || err?.message === 'Failed to fetch') {
+      throw new Error('Network issue while communicating with Google Tasks.');
+    }
+    throw err;
+  }
 }
 
 const STUDY_TASK_LIST_TITLE = 'Study Revisions (ReviseDrive)';
@@ -15,7 +32,7 @@ const STUDY_TASK_LIST_TITLE = 'Study Revisions (ReviseDrive)';
 // Find or create dedicated task list
 export async function getOrCreateTaskList(): Promise<string> {
   const headers = await getAuthHeader();
-  const listRes = await fetch('https://tasks.googleapis.com/tasks/v1/users/@me/lists', {
+  const listRes = await tasksFetch('https://tasks.googleapis.com/tasks/v1/users/@me/lists', {
     headers,
   });
 
@@ -33,7 +50,7 @@ export async function getOrCreateTaskList(): Promise<string> {
   }
 
   // Create new task list
-  const createRes = await fetch('https://tasks.googleapis.com/tasks/v1/users/@me/lists', {
+  const createRes = await tasksFetch('https://tasks.googleapis.com/tasks/v1/users/@me/lists', {
     method: 'POST',
     headers: {
       ...headers,
@@ -82,7 +99,7 @@ export async function createOrUpdateRevisionTask(
   };
 
   if (existingTaskId) {
-    const updateRes = await fetch(
+    const updateRes = await tasksFetch(
       `https://tasks.googleapis.com/tasks/v1/lists/${taskListId}/tasks/${existingTaskId}`,
       {
         method: 'PATCH',
@@ -100,7 +117,7 @@ export async function createOrUpdateRevisionTask(
     }
   }
 
-  const createRes = await fetch(
+  const createRes = await tasksFetch(
     `https://tasks.googleapis.com/tasks/v1/lists/${taskListId}/tasks`,
     {
       method: 'POST',
@@ -121,37 +138,45 @@ export async function createOrUpdateRevisionTask(
 }
 
 export async function completeTask(taskId: string): Promise<void> {
-  const headers = await getAuthHeader();
-  const taskListId = await getOrCreateTaskList();
+  try {
+    const headers = await getAuthHeader();
+    const taskListId = await getOrCreateTaskList();
 
-  await fetch(
-    `https://tasks.googleapis.com/tasks/v1/lists/${taskListId}/tasks/${taskId}`,
-    {
-      method: 'PATCH',
-      headers: {
-        ...headers,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        status: 'completed',
-      }),
-    }
-  );
+    await tasksFetch(
+      `https://tasks.googleapis.com/tasks/v1/lists/${taskListId}/tasks/${taskId}`,
+      {
+        method: 'PATCH',
+        headers: {
+          ...headers,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          status: 'completed',
+        }),
+      }
+    );
+  } catch (err) {
+    console.warn('Could not complete task in Google Tasks:', err);
+  }
 }
 
 export async function deleteTask(taskId: string): Promise<void> {
-  const headers = await getAuthHeader();
-  const taskListId = await getOrCreateTaskList();
+  try {
+    const headers = await getAuthHeader();
+    const taskListId = await getOrCreateTaskList();
 
-  const res = await fetch(
-    `https://tasks.googleapis.com/tasks/v1/lists/${taskListId}/tasks/${taskId}`,
-    {
-      method: 'DELETE',
-      headers,
+    const res = await tasksFetch(
+      `https://tasks.googleapis.com/tasks/v1/lists/${taskListId}/tasks/${taskId}`,
+      {
+        method: 'DELETE',
+        headers,
+      }
+    );
+
+    if (!res.ok && res.status !== 404) {
+      console.warn('Could not delete task:', await res.text());
     }
-  );
-
-  if (!res.ok && res.status !== 404) {
-    console.warn('Could not delete task:', await res.text());
+  } catch (err) {
+    console.warn('Could not delete task from Google Tasks:', err);
   }
 }

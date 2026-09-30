@@ -12,6 +12,7 @@ interface NavbarProps {
   revisionsDueCount: number;
   onOpenPlanner: () => void;
   onOpenDashboard: () => void;
+  onOpenToday: () => void;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({
@@ -24,121 +25,87 @@ export const Navbar: React.FC<NavbarProps> = ({
   revisionsDueCount,
   onOpenPlanner,
   onOpenDashboard,
+  onOpenToday,
 }) => {
   return (
-    <header className="h-16 px-4 sm:px-6 bg-white dark:bg-zinc-900 border-b border-zinc-200 dark:border-zinc-800 flex items-center justify-between sticky top-0 z-40 shadow-2xs">
-      {/* Brand */}
-      <div className="flex items-center gap-3">
-        <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-indigo-600 to-violet-500 flex items-center justify-center text-white shadow-xs">
+    <header className="h-16 px-4 sm:px-8 bg-[#FDFBF7]/80 backdrop-blur-3xl border-b border-zinc-200/50 flex items-center justify-between sticky top-0 z-40">
+      {/* Zone 1: Brand */}
+      <div className="flex items-center gap-4">
+        <div className="w-10 h-10 rounded-2xl bg-indigo-600 text-white flex items-center justify-center shadow-xl shrink-0">
           <HardDrive className="w-5 h-5" />
         </div>
-        <div className="hidden sm:block">
-          <div className="flex items-center gap-2">
-            <span className="font-bold text-base text-zinc-900 dark:text-zinc-100 tracking-tight">
-              ReviseDrive
-            </span>
-            <span className="text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/80 flex items-center gap-1">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-              Drive Synced
-            </span>
-          </div>
-          <p className="text-[11px] text-zinc-500 dark:text-zinc-400">
-            Subject &amp; Topics Hub • 200MB PDF Support
-          </p>
-        </div>
+        <span className="font-black text-lg text-zinc-900 tracking-tighter uppercase whitespace-nowrap">
+          Revise<span className="text-indigo-600">Drive</span>
+        </span>
       </div>
 
-      {/* Center Actions / Due Alert */}
-      <div className="flex items-center gap-2 sm:gap-3">
-        {revisionsDueCount > 0 && (
-          <button
-            onClick={onOpenPlanner}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-50 dark:bg-amber-950/60 text-amber-800 dark:text-amber-200 border border-amber-200 dark:border-amber-800 text-xs font-semibold hover:bg-amber-100 dark:hover:bg-amber-900/60 transition-colors shadow-2xs"
-          >
-            <AlertCircle className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400 shrink-0" />
-            <span>{revisionsDueCount} Due for Revision</span>
-          </button>
-        )}
-
+      {/* Zone 2: Navigation Links */}
+      <nav className="hidden md:flex items-center gap-10 mx-10">
         <button
-          onClick={onOpenPlanner}
-          className="hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 hover:bg-zinc-50 dark:hover:bg-zinc-800 text-xs font-medium text-zinc-700 dark:text-zinc-200 transition-colors shadow-2xs"
+          onClick={onOpenToday}
+          className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-400 hover:text-indigo-600 transition-all whitespace-nowrap"
         >
-          <CalendarIcon className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
-          <span>Revisions &amp; Schedule</span>
+          Agenda
         </button>
-
         <button
           onClick={onOpenDashboard}
-          className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-indigo-200 dark:border-indigo-800/80 bg-indigo-50/50 dark:bg-indigo-950/40 hover:bg-indigo-100/60 dark:hover:bg-indigo-900/50 text-xs font-semibold text-indigo-700 dark:text-indigo-300 transition-colors shadow-2xs"
+          className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-400 hover:text-indigo-600 transition-all whitespace-nowrap"
         >
-          <BarChart3 className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
-          <span>Study Insights</span>
+          Analysis
         </button>
+        <button
+          onClick={onOpenPlanner}
+          className="text-[10px] font-black uppercase tracking-[0.2em] text-zinc-400 hover:text-indigo-600 transition-all whitespace-nowrap relative"
+        >
+          Orbit
+          {revisionsDueCount > 0 && (
+            <span className="absolute -top-2 -right-4 px-1.5 py-0.5 bg-rose-600 text-white text-[8px] font-black rounded-full shadow-lg animate-bounce">
+              {revisionsDueCount}
+            </span>
+          )}
+        </button>
+      </nav>
 
-        {/* Sync Button */}
-        <div className="flex items-center gap-2">
+      {/* Zone 3: Primary Actions */}
+      <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 pr-4 border-r border-zinc-200/50 mr-2">
+          {lastSynced && (
+            <span className="hidden lg:inline text-[10px] font-bold text-zinc-300 font-mono tabular-nums">
+              {lastSynced.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+            </span>
+          )}
           <button
             onClick={onSync}
             disabled={isSyncing}
-            title="Sync with Google Drive & Calendar"
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 hover:bg-zinc-50 dark:hover:bg-zinc-800 text-xs font-medium text-zinc-700 dark:text-zinc-200 transition-colors disabled:opacity-50 shadow-2xs"
+            className="p-2.5 text-zinc-300 hover:text-indigo-600 transition-all disabled:opacity-50"
+            title="Sync Now"
           >
-            <RefreshCw className={`w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400 ${isSyncing ? 'animate-spin' : ''}`} />
-            <span className="hidden sm:inline">{isSyncing ? 'Syncing...' : 'Sync Drive'}</span>
+            <RefreshCw className={`w-4 h-4 ${isSyncing ? 'animate-spin text-amber-500' : ''}`} />
           </button>
-
-          {lastSynced && (
-            <span className="hidden lg:inline text-[11px] text-zinc-400 dark:text-zinc-500">
-              Synced {lastSynced.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-            </span>
-          )}
         </div>
 
-        {/* Open in Drive Folder */}
-        {rootFolderId && (
-          <a
-            href={`https://drive.google.com/drive/folders/${rootFolderId}`}
-            target="_blank"
-            rel="noreferrer"
-            title="Open ReviseDrive root folder in Google Drive"
-            className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-zinc-200 dark:border-zinc-700 hover:bg-zinc-50 dark:hover:bg-zinc-800 text-xs font-medium text-zinc-700 dark:text-zinc-200 transition-colors shadow-2xs"
-          >
-            <ExternalLink className="w-3.5 h-3.5 text-zinc-500" />
-            <span className="hidden md:inline">Open Drive Folder</span>
-          </a>
-        )}
-      </div>
-
-      {/* User profile & Logout */}
-      <div className="flex items-center gap-3">
         {user && (
-          <div className="flex items-center gap-2.5 pl-2 sm:pl-3 border-l border-zinc-200 dark:border-zinc-800">
-            {user.photoURL ? (
-              <img
-                src={user.photoURL}
-                alt={user.displayName || 'User'}
-                className="w-8 h-8 rounded-full border border-zinc-300 dark:border-zinc-700 object-cover"
-              />
-            ) : (
-              <div className="w-8 h-8 rounded-full bg-indigo-600 text-white font-semibold text-xs flex items-center justify-center">
-                {user.displayName ? user.displayName[0].toUpperCase() : 'U'}
-              </div>
-            )}
-            <div className="hidden lg:block text-left">
-              <p className="text-xs font-semibold text-zinc-800 dark:text-zinc-200 leading-tight">
-                {user.displayName || 'Google User'}
-              </p>
-              <p className="text-[10px] text-zinc-500 dark:text-zinc-400 truncate max-w-[130px]">
-                {user.email}
-              </p>
+          <div className="flex items-center gap-4">
+            <div className="relative group shrink-0">
+              {user.photoURL ? (
+                <img
+                  src={user.photoURL}
+                  alt={user.displayName || 'User'}
+                  className="w-10 h-10 rounded-2xl border border-zinc-200 shadow-sm group-hover:scale-110 transition-transform"
+                />
+              ) : (
+                <div className="w-10 h-10 rounded-2xl bg-zinc-100 text-zinc-500 text-xs font-black flex items-center justify-center border border-zinc-200 shadow-sm">
+                  {user.displayName ? user.displayName[0].toUpperCase() : 'U'}
+                </div>
+              )}
             </div>
+            
             <button
               onClick={onLogout}
+              className="p-2.5 text-zinc-300 hover:text-rose-600 transition-all"
               title="Sign Out"
-              className="p-1.5 text-zinc-400 hover:text-red-600 dark:hover:text-red-400 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-800 transition-colors"
             >
-              <LogOut className="w-4 h-4" />
+              <LogOut className="w-5 h-5" />
             </button>
           </div>
         )}

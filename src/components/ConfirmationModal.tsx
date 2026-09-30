@@ -29,46 +29,39 @@ export const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4 animate-in fade-in duration-200">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-zinc-900/60 backdrop-blur-sm p-4 animate-in fade-in duration-300">
       <div 
-        className="w-full max-w-md bg-white dark:bg-zinc-900 rounded-2xl shadow-2xl border border-zinc-200 dark:border-zinc-800 overflow-hidden"
+        className="w-full max-w-md bg-white rounded-[2.5rem] shadow-2xl border border-zinc-200 overflow-hidden"
         role="dialog"
         aria-modal="true"
       >
-        <div className="p-6">
-          <div className="flex items-start gap-4">
-            <div className={`p-3 rounded-xl shrink-0 ${isDestructive ? 'bg-red-50 text-red-600 dark:bg-red-950/50 dark:text-red-400' : 'bg-amber-50 text-amber-600 dark:bg-amber-950/50 dark:text-amber-400'}`}>
-              {isDestructive ? <Trash2 className="w-6 h-6" /> : <AlertTriangle className="w-6 h-6" />}
+        <div className="p-10">
+          <div className="flex flex-col items-center text-center space-y-8">
+            <div className={`p-5 rounded-2xl shrink-0 border ${isDestructive ? 'bg-rose-50 text-rose-600 border-rose-100' : 'bg-amber-50 text-amber-600 border-amber-100'}`}>
+              {isDestructive ? <Trash2 className="w-10 h-10" /> : <AlertTriangle className="w-10 h-10" />}
             </div>
-            <div className="flex-1">
-              <h3 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">
+            <div className="space-y-4">
+              <h3 className="text-2xl font-black text-zinc-900 tracking-tight">
                 {title}
               </h3>
-              <p className="mt-2 text-sm text-zinc-600 dark:text-zinc-400 leading-relaxed">
+              <p className="text-sm font-bold text-zinc-500 leading-relaxed max-w-[280px] mx-auto uppercase tracking-wide">
                 {message}
               </p>
               {itemDescription && (
-                <div className="mt-3 p-3 bg-zinc-100 dark:bg-zinc-800/80 rounded-lg text-xs font-mono text-zinc-700 dark:text-zinc-300 break-all border border-zinc-200 dark:border-zinc-700">
+                <div className="mt-6 p-4 bg-zinc-50 rounded-2xl text-[10px] font-black text-zinc-400 break-all border border-zinc-100 uppercase tracking-[0.2em]">
                   {itemDescription}
                 </div>
               )}
             </div>
-            <button
-              onClick={onCancel}
-              disabled={isProcessing}
-              className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 p-1 rounded-lg transition-colors"
-            >
-              <X className="w-5 h-5" />
-            </button>
           </div>
         </div>
 
-        <div className="bg-zinc-50 dark:bg-zinc-900/80 px-6 py-4 flex items-center justify-end gap-3 border-t border-zinc-100 dark:border-zinc-800">
+        <div className="bg-zinc-50 px-10 py-8 flex flex-col sm:flex-row items-center justify-center gap-4 border-t border-zinc-100">
           <button
             type="button"
             onClick={onCancel}
             disabled={isProcessing}
-            className="px-4 py-2 text-sm font-medium text-zinc-700 dark:text-zinc-300 hover:bg-zinc-200/60 dark:hover:bg-zinc-800 rounded-xl transition-colors disabled:opacity-50"
+            className="w-full sm:w-auto px-8 py-3 text-[10px] font-black uppercase tracking-[0.2em] text-zinc-400 hover:text-zinc-900 transition-all disabled:opacity-50"
           >
             {cancelLabel}
           </button>
@@ -76,16 +69,16 @@ export const ConfirmationModal: React.FC<ConfirmationModalProps> = ({
             type="button"
             onClick={onConfirm}
             disabled={isProcessing}
-            className={`px-4 py-2 text-sm font-medium text-white rounded-xl shadow-xs transition-all disabled:opacity-50 flex items-center gap-2 ${
+            className={`w-full sm:w-auto px-10 py-4 text-[10px] font-black uppercase tracking-[0.2em] text-white rounded-2xl shadow-lg transition-all disabled:opacity-50 flex items-center justify-center gap-3 active:scale-95 ${
               isDestructive
-                ? 'bg-red-600 hover:bg-red-700 active:bg-red-800'
-                : 'bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800'
+                ? 'bg-rose-600 hover:bg-rose-700 shadow-rose-200'
+                : 'bg-indigo-600 hover:bg-indigo-700 shadow-indigo-200'
             }`}
           >
             {isProcessing ? (
               <>
                 <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                <span>Processing...</span>
+                <span>Syncing...</span>
               </>
             ) : (
               confirmLabel

@@ -17,7 +17,8 @@ import {
   List,
   BarChart3,
   X,
-  FileText
+  FileText,
+  Zap
 } from 'lucide-react';
 import { SubjectItem, TopicItem } from '../types';
 import { formatFileSize, getRevisionStatus } from '../utils/revisionUtils';
@@ -32,8 +33,8 @@ interface SidebarProps {
   onDeleteSubject: (subject: SubjectItem) => void;
   onRenameTopic: (topic: TopicItem) => void;
   onDeleteTopic: (topic: TopicItem) => void;
-  activeView: 'topic' | 'planner' | 'dashboard';
-  setActiveView: (view: 'topic' | 'planner' | 'dashboard') => void;
+  activeView: 'topic' | 'planner' | 'dashboard' | 'today';
+  setActiveView: (view: 'topic' | 'planner' | 'dashboard' | 'today') => void;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -199,110 +200,61 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const hasSearchFilter = Boolean(trimmedQuery);
 
   return (
-    <aside className="w-80 shrink-0 h-[calc(100vh-4rem)] bg-zinc-50 dark:bg-zinc-900/95 border-r border-zinc-200 dark:border-zinc-800 flex flex-col justify-between select-none">
+    <aside className="w-80 shrink-0 h-[calc(100vh-4rem)] bg-[#F7F3E9]/50 backdrop-blur-xl border-r border-zinc-200/50 flex flex-col justify-between select-none z-10">
       {/* Search and Navigation Views */}
-      <div className="p-3 border-b border-zinc-200/80 dark:border-zinc-800/80 space-y-2">
+      <div className="p-5 space-y-5">
         {/* Search Bar Input */}
-        <div className="relative">
-          <Search className="w-4 h-4 absolute left-3 top-2.5 text-zinc-400" />
+        <div className="relative group">
+          <Search className="w-4 h-4 absolute left-3.5 top-3 text-indigo-400 group-focus-within:text-indigo-600 transition-colors" />
           <input
             ref={searchInputRef}
             type="text"
-            placeholder="Search subjects or topics... (/ to focus)"
+            placeholder="Search knowledge... (/)"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Escape') {
-                handleClearSearch();
-              }
-            }}
-            className="w-full pl-9 pr-8 py-1.5 text-xs bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-xl focus:outline-hidden focus:ring-2 focus:ring-indigo-500/20 text-zinc-800 dark:text-zinc-200 placeholder:text-zinc-400"
+            className="w-full pl-10 pr-8 py-2.5 text-xs bg-white border border-zinc-200 rounded-xl focus:outline-hidden focus:ring-1 focus:ring-indigo-400 focus:bg-white transition-all placeholder:text-zinc-400 text-zinc-800 font-black uppercase tracking-widest shadow-sm"
           />
-          {searchQuery ? (
-            <button
-              onClick={handleClearSearch}
-              title="Clear search"
-              className="absolute right-2.5 top-2 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 p-0.5 rounded-md hover:bg-zinc-100 dark:hover:bg-zinc-700 transition-colors"
-            >
-              <X className="w-3.5 h-3.5" />
-            </button>
-          ) : (
-            <span className="hidden sm:inline-block absolute right-2.5 top-2.5 text-[10px] text-zinc-400 font-mono border border-zinc-200 dark:border-zinc-700 px-1 rounded-xs bg-zinc-50 dark:bg-zinc-900">
-              /
-            </span>
-          )}
         </div>
 
-        {/* Search match stats badge */}
-        {hasSearchFilter && (
-          <div className="flex items-center justify-between px-1 text-[11px] text-zinc-500">
-            <span>
-              Matches: <strong className="text-indigo-600 dark:text-indigo-400">{totalMatchingTopics}</strong> topic{totalMatchingTopics !== 1 ? 's' : ''}, <strong className="text-indigo-600 dark:text-indigo-400">{totalMatchingSubjects}</strong> subject{totalMatchingSubjects !== 1 ? 's' : ''}
-            </span>
+        {/* View Switcher (Segmented Control) */}
+        <div className="flex p-1 bg-zinc-200/50 backdrop-blur-3xl rounded-2xl border border-zinc-200/50 shadow-inner">
+          {[
+            { id: 'today', label: 'Day', icon: Zap, color: 'text-amber-600' },
+            { id: 'topic', label: 'Base', icon: List, color: 'text-blue-600' },
+            { id: 'planner', label: 'Orbit', icon: Calendar, color: 'text-emerald-600' },
+            { id: 'dashboard', label: 'Pulse', icon: BarChart3, color: 'text-rose-600' },
+          ].map((view) => (
             <button
-              onClick={handleClearSearch}
-              className="text-xs text-indigo-600 dark:text-indigo-400 hover:underline font-medium"
+              key={view.id}
+              onClick={() => setActiveView(view.id as any)}
+              className={`flex-1 flex flex-col items-center justify-center gap-1 py-2.5 rounded-xl text-[9px] font-black transition-all ${
+                activeView === view.id
+                  ? 'bg-white text-indigo-600 shadow-xl scale-[1.05]'
+                  : 'text-zinc-400 hover:text-zinc-600 hover:bg-white/40'
+              }`}
             >
-              Clear
+              <view.icon className={`w-3.5 h-3.5 ${activeView === view.id ? 'text-indigo-600' : view.color}`} />
+              <span className="uppercase tracking-[0.1em]">{view.label}</span>
             </button>
-          </div>
-        )}
-
-        {/* Quick View Switcher */}
-        <div className="grid grid-cols-3 gap-1 p-1 bg-zinc-200/60 dark:bg-zinc-800/70 rounded-xl">
-          <button
-            onClick={() => setActiveView('topic')}
-            className={`flex items-center justify-center gap-1 py-1.5 px-1.5 rounded-lg text-[11px] font-medium transition-all ${
-              activeView === 'topic'
-                ? 'bg-white dark:bg-zinc-700 text-zinc-900 dark:text-zinc-100 shadow-2xs font-semibold'
-                : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900'
-            }`}
-          >
-            <List className="w-3 h-3 shrink-0" />
-            <span className="truncate">Topics</span>
-          </button>
-          <button
-            onClick={() => setActiveView('planner')}
-            className={`flex items-center justify-center gap-1 py-1.5 px-1.5 rounded-lg text-[11px] font-medium transition-all relative ${
-              activeView === 'planner'
-                ? 'bg-white dark:bg-zinc-700 text-zinc-900 dark:text-zinc-100 shadow-2xs font-semibold'
-                : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900'
-            }`}
-          >
-            <Calendar className="w-3 h-3 shrink-0" />
-            <span className="truncate">Revisions</span>
-            {dueCount > 0 && (
-              <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse shrink-0" />
-            )}
-          </button>
-          <button
-            onClick={() => setActiveView('dashboard')}
-            className={`flex items-center justify-center gap-1 py-1.5 px-1.5 rounded-lg text-[11px] font-medium transition-all ${
-              activeView === 'dashboard'
-                ? 'bg-white dark:bg-zinc-700 text-indigo-600 dark:text-indigo-400 shadow-2xs font-semibold'
-                : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900'
-            }`}
-          >
-            <BarChart3 className="w-3 h-3 shrink-0" />
-            <span className="truncate">Insights</span>
-          </button>
+          ))}
         </div>
       </div>
 
       {/* Subjects & Topics Tree */}
-      <div className="flex-1 overflow-y-auto px-3 py-3 space-y-1">
-        <div className="flex items-center justify-between px-2 py-1.5">
-          <span className="text-[11px] font-bold uppercase tracking-wider text-zinc-400 dark:text-zinc-500">
-            Drive Subjects ({subjects.length})
+      <div className="flex-1 overflow-y-auto px-5 py-2 space-y-1.5 custom-scrollbar">
+        <div className="flex items-center justify-between px-1 mb-6">
+          <span className="text-[10px] font-black uppercase tracking-[0.3em] text-zinc-400">
+            Vault Library
           </span>
           <button
             onClick={() => setIsCreatingSubject(true)}
-            className="flex items-center gap-1 text-[11px] font-semibold text-indigo-600 dark:text-indigo-400 hover:text-indigo-700 transition-colors"
+            className="p-2 text-indigo-600 hover:text-indigo-700 hover:bg-white rounded-xl transition-all border border-transparent hover:border-zinc-200 shadow-xs hover:shadow-md"
           >
-            <Plus className="w-3.5 h-3.5" />
-            <span>New Subject</span>
+            <FolderPlus className="w-4 h-4" />
           </button>
         </div>
+
+        {/* ... (subject/topic rendering) */}
 
         {/* Add Subject Input form */}
         {isCreatingSubject && (
@@ -348,10 +300,10 @@ export const Sidebar: React.FC<SidebarProps> = ({
             </p>
             <button
               onClick={() => setIsCreatingSubject(true)}
-              className="mt-3 inline-flex items-center gap-1.5 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-medium rounded-xl shadow-2xs"
+              className="mt-3 inline-flex items-center gap-1.5 px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold rounded-xl shadow-lg shadow-indigo-600/20 active:scale-95 transition-all"
             >
-              <Plus className="w-3.5 h-3.5" />
-              <span>Add Subject</span>
+              <FolderPlus className="w-4 h-4" />
+              <span>New Subject</span>
             </button>
           </div>
         )}
@@ -384,181 +336,114 @@ export const Sidebar: React.FC<SidebarProps> = ({
           const isExpanded = hasSearchFilter ? true : expandedSubjects[sub.id] !== false;
 
           return (
-            <div key={sub.id} className="rounded-xl overflow-hidden">
+            <div key={sub.id} className="space-y-0.5">
               {/* Subject Row */}
               <div
-                className="group flex items-center justify-between px-2 py-1.5 rounded-lg hover:bg-zinc-200/50 dark:hover:bg-zinc-800/60 transition-colors text-zinc-800 dark:text-zinc-200 cursor-pointer"
+                className={`group flex items-center justify-between px-4 py-3 rounded-2xl transition-all cursor-pointer ${
+                  isExpanded 
+                    ? 'bg-white text-indigo-600 shadow-xl scale-[1.02]' 
+                    : 'text-zinc-500 hover:bg-white/60 hover:text-zinc-800'
+                }`}
                 onClick={() => toggleSubject(sub.id)}
               >
-                <div className="flex items-center gap-1.5 min-w-0 flex-1">
-                  {isExpanded ? (
-                    <ChevronDown className="w-3.5 h-3.5 text-zinc-400 shrink-0" />
-                  ) : (
-                    <ChevronRight className="w-3.5 h-3.5 text-zinc-400 shrink-0" />
-                  )}
-                  <Folder className="w-4 h-4 text-indigo-500 shrink-0" />
-                  <span className="text-xs font-semibold truncate">
+                <div className="flex items-center gap-3 min-w-0 flex-1">
+                  <ChevronRight className={`w-4 h-4 transition-transform duration-300 ${isExpanded ? 'rotate-90 text-indigo-600' : 'text-zinc-400'}`} />
+                  <span className="text-[11px] font-black truncate uppercase tracking-[0.1em]">
                     {highlightMatch(sub.name, searchQuery)}
-                  </span>
-                  <span className="text-[10px] text-zinc-400 dark:text-zinc-500 font-mono shrink-0">
-                    ({sub.topics.length})
                   </span>
                 </div>
 
-                <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity" onClick={(e) => e.stopPropagation()}>
-                  <button
-                    onClick={() => {
-                      setAddingTopicSubjectId(sub.id);
-                      setExpandedSubjects((prev) => ({ ...prev, [sub.id]: true }));
-                    }}
-                    title="Add Topic"
-                    className="p-1 hover:text-indigo-600 rounded text-zinc-400"
-                  >
-                    <Plus className="w-3.5 h-3.5" />
-                  </button>
-                  <button
-                    onClick={() => onRenameSubject(sub)}
-                    title="Rename Subject"
-                    className="p-1 hover:text-zinc-700 dark:hover:text-zinc-200 rounded text-zinc-400"
-                  >
-                    <Edit2 className="w-3 h-3" />
-                  </button>
-                  <button
-                    onClick={() => onDeleteSubject(sub)}
-                    title="Delete Subject"
-                    className="p-1 hover:text-red-600 rounded text-zinc-400"
-                  >
-                    <Trash2 className="w-3 h-3" />
-                  </button>
+                <div className="flex items-center gap-3">
+                  <span className={`text-[10px] font-black font-mono tabular-nums px-2 py-0.5 rounded-lg ${isExpanded ? 'bg-indigo-50 text-indigo-600' : 'bg-zinc-200/50 text-zinc-500'}`}>
+                    {sub.topics.length}
+                  </span>
+                  <div className="flex items-center opacity-0 group-hover:opacity-100 transition-all duration-200" onClick={(e) => e.stopPropagation()}>
+                    <button
+                      onClick={() => onRenameSubject(sub)}
+                      className="p-1.5 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+                    >
+                      <Edit2 className="w-3 h-3" />
+                    </button>
+                    <button
+                      onClick={() => onDeleteSubject(sub)}
+                      className="p-1.5 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
+                    >
+                      <Trash2 className="w-3 h-3" />
+                    </button>
+                  </div>
                 </div>
               </div>
 
               {/* Topics inside Subject */}
               {isExpanded && (
-                <div className="pl-6 pr-1 py-0.5 space-y-0.5 border-l-2 border-zinc-200 dark:border-zinc-800 ml-3.5 my-0.5">
+                <div className="space-y-1 ml-4 pt-1">
                   {sub.topics.map((topic) => {
                     const isSelected = selectedTopic?.id === topic.id && activeView === 'topic';
                     const status = getRevisionStatus(topic.settings.nextRevisionDate);
 
-                    // Check if a file name inside this topic matched
-                    const matchingFile = hasSearchFilter
-                      ? topic.files.find((f) => f.name.toLowerCase().includes(trimmedQuery))
-                      : null;
-
                     return (
-                      <div
-                        key={topic.id}
-                        onClick={() => {
-                          onSelectTopic(topic);
-                          setActiveView('topic');
-                        }}
-                        className={`group flex flex-col px-2.5 py-1.5 rounded-lg text-xs cursor-pointer transition-all ${
-                          isSelected
-                            ? 'bg-indigo-600 text-white font-medium shadow-2xs'
-                            : 'text-zinc-700 dark:text-zinc-300 hover:bg-zinc-200/60 dark:hover:bg-zinc-800/70'
-                        }`}
-                      >
-                        <div className="flex items-center justify-between gap-1.5 w-full">
-                          <div className="flex items-center gap-2 min-w-0 flex-1">
-                            <BookOpen className={`w-3.5 h-3.5 shrink-0 ${isSelected ? 'text-indigo-200' : 'text-zinc-400'}`} />
-                            <span className="truncate">
+                      <div key={topic.id} className="group/topic">
+                        <div
+                          className={`flex items-center justify-between px-3 py-2 rounded-xl transition-all cursor-pointer ${
+                            isSelected
+                              ? 'bg-white text-indigo-600 shadow-md scale-[1.02]'
+                              : 'text-zinc-500 hover:text-zinc-800 hover:bg-white/40'
+                          }`}
+                          onClick={() => {
+                            onSelectTopic(topic);
+                            setActiveView('topic');
+                          }}
+                        >
+                          <div className="flex items-center gap-3 min-w-0 flex-1">
+                            <BookOpen className={`w-3.5 h-3.5 shrink-0 ${isSelected ? 'text-indigo-600' : 'text-zinc-400'}`} />
+                            <span className={`text-[11px] truncate ${isSelected ? 'font-black' : 'font-bold'}`}>
                               {highlightMatch(topic.name, searchQuery)}
                             </span>
                           </div>
 
-                          <div className="flex items-center gap-1.5 shrink-0">
-                            {/* File count */}
-                            <span className={`text-[10px] font-mono ${isSelected ? 'text-indigo-200' : 'text-zinc-400'}`}>
-                              {topic.files.length}
-                            </span>
-
-                            {/* Revision Status Dot */}
+                          <div className="flex items-center gap-2 shrink-0">
                             {status === 'overdue' && (
-                              <span title="Revision Overdue" className="w-2 h-2 rounded-full bg-red-500 shrink-0" />
+                              <div className="w-2 h-2 rounded-full bg-rose-500 shadow-sm shadow-rose-500/30" title="Overdue" />
                             )}
                             {status === 'due_today' && (
-                              <span title="Revision Due Today" className="w-2 h-2 rounded-full bg-amber-400 animate-ping shrink-0" />
+                              <div className="w-2 h-2 rounded-full bg-amber-500 shadow-sm shadow-amber-500/30" title="Due Today" />
                             )}
-                            {status === 'upcoming' && (
-                              <span title="Revision Scheduled" className="w-2 h-2 rounded-full bg-emerald-400 shrink-0" />
-                            )}
-
-                            {/* Quick Topic Actions */}
-                            <div
-                              className={`opacity-0 group-hover:opacity-100 transition-opacity flex items-center ${
-                                isSelected ? 'text-white' : 'text-zinc-400'
-                              }`}
-                              onClick={(e) => e.stopPropagation()}
-                            >
+                            <div className="flex items-center opacity-0 group-hover/topic:opacity-100 transition-all duration-200" onClick={(e) => e.stopPropagation()}>
                               <button
                                 onClick={() => onRenameTopic(topic)}
-                                title="Rename Topic"
-                                className="p-0.5 hover:text-amber-300"
+                                className="p-1.5 hover:text-indigo-600 hover:bg-white rounded-lg transition-colors"
                               >
-                                <Edit2 className="w-3 h-3" />
-                              </button>
-                              <button
-                                onClick={() => onDeleteTopic(topic)}
-                                title="Delete Topic"
-                                className="p-0.5 hover:text-red-300"
-                              >
-                                <Trash2 className="w-3 h-3" />
+                                <Edit2 className="w-2.5 h-2.5" />
                               </button>
                             </div>
                           </div>
                         </div>
-
-                        {/* Matching File sub-label if topic appeared because of file match */}
-                        {matchingFile && (
-                          <div className={`mt-0.5 flex items-center gap-1 text-[10px] pl-5 truncate ${isSelected ? 'text-indigo-100' : 'text-zinc-400'}`}>
-                            <FileText className="w-3 h-3 shrink-0" />
-                            <span className="truncate">
-                              Matched file: {highlightMatch(matchingFile.name, searchQuery)}
-                            </span>
-                          </div>
-                        )}
                       </div>
                     );
                   })}
 
-                  {/* Inline Add Topic input for this Subject */}
+                  {/* Inline Add Topic Field */}
                   {addingTopicSubjectId === sub.id ? (
                     <form
                       onSubmit={(e) => handleCreateTopicSubmit(sub, e)}
-                      className="p-2 bg-white dark:bg-zinc-800 rounded-lg border border-indigo-200 dark:border-indigo-800 shadow-2xs space-y-1.5"
+                      className="px-2 py-1.5 mt-1"
                     >
                       <input
-                        type="text"
                         autoFocus
-                        placeholder="e.g. Cranial Nerves..."
                         value={newTopicName}
                         onChange={(e) => setNewTopicName(e.target.value)}
-                        className="w-full text-xs px-2 py-1 bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded text-zinc-800 dark:text-zinc-200 focus:outline-hidden"
+                        placeholder="Topic name..."
+                        onBlur={() => !newTopicName && setAddingTopicSubjectId(null)}
+                        className="w-full text-[11px] px-2.5 py-1.5 bg-white dark:bg-zinc-800 border-2 border-purple-200 dark:border-purple-800/60 rounded-lg focus:outline-hidden focus:border-purple-500 dark:focus:border-purple-600 text-zinc-800 dark:text-zinc-200"
                       />
-                      <div className="flex items-center justify-end gap-1">
-                        <button
-                          type="button"
-                          onClick={() => setAddingTopicSubjectId(null)}
-                          className="px-2 py-0.5 text-[10px] text-zinc-500"
-                        >
-                          Cancel
-                        </button>
-                        <button
-                          type="submit"
-                          disabled={!newTopicName.trim()}
-                          className="px-2 py-0.5 text-[10px] font-medium bg-indigo-600 text-white rounded hover:bg-indigo-700 disabled:opacity-50"
-                        >
-                          Add Topic
-                        </button>
-                      </div>
                     </form>
                   ) : (
                     <button
                       onClick={() => setAddingTopicSubjectId(sub.id)}
-                      className="w-full text-left flex items-center gap-1.5 px-2 py-1 text-[11px] text-zinc-400 hover:text-indigo-600 dark:hover:text-indigo-400 rounded transition-colors"
+                      className="w-full flex items-center gap-1.5 px-3 py-1.5 text-[10px] font-bold text-indigo-600 dark:text-indigo-400 hover:bg-indigo-50 dark:hover:bg-indigo-950/30 rounded-lg transition-colors uppercase tracking-wider"
                     >
                       <Plus className="w-3 h-3" />
-                      <span>Add Topic in {sub.name}</span>
+                      <span>New Topic</span>
                     </button>
                   )}
                 </div>
@@ -569,15 +454,15 @@ export const Sidebar: React.FC<SidebarProps> = ({
       </div>
 
       {/* Storage & Drive info footer */}
-      <div className="p-3 border-t border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900/50">
-        <div className="flex items-center justify-between text-xs text-zinc-500 dark:text-zinc-400">
-          <div className="flex items-center gap-1.5">
-            <HardDrive className="w-3.5 h-3.5 text-indigo-500" />
-            <span className="font-medium text-zinc-700 dark:text-zinc-300">
+      <div className="p-4 border-t border-zinc-200/50 bg-[#F7F3E9]/80 backdrop-blur-3xl">
+        <div className="flex items-center justify-between text-[10px] font-black uppercase tracking-[0.2em]">
+          <div className="flex items-center gap-2 text-indigo-600">
+            <HardDrive className="w-4 h-4" />
+            <span className="text-zinc-800">
               {formatFileSize(totalBytes)}
             </span>
           </div>
-          <span>{totalFiles} file{totalFiles !== 1 ? 's' : ''} in Drive</span>
+          <span className="text-zinc-400">{totalFiles} Entities</span>
         </div>
       </div>
     </aside>

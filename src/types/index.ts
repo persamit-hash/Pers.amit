@@ -11,8 +11,8 @@ export type RevisionFrequency =
 export interface RevisionLogEntry {
   id: string;
   date: string; // YYYY-MM-DD
-  minutes: number;
   completed: boolean;
+  minutes: number;
   notes?: string;
 }
 
@@ -27,8 +27,8 @@ export interface RevisionSettings {
   lastRevisedAt?: string;
   nextRevisionDate?: string;
   revisionCount: number;
+  totalStudyMinutes: number;
   notes?: string;
-  totalStudyMinutes?: number;
   history?: RevisionLogEntry[];
 }
 

@@ -1,72 +1,181 @@
 import React from 'react';
-import { X, ExternalLink, Download, FileText } from 'lucide-react';
-import { DriveFileItem } from '../types';
+import { X, ExternalLink, Download, FileText, ChevronLeft, ChevronRight } from 'lucide-react';
+import { DriveFileItem, TopicItem } from '../types';
 import { formatFileSize } from '../utils/revisionUtils';
 
 interface FilePreviewModalProps {
   file: DriveFileItem | null;
-  onClose: () => void;
+  topic: TopicItem | null;
+  onClose: (minutes: number) => void;
+  onFileChange: (file: DriveFileItem) => void;
+  onUpdateRevisionDate: (date: string) => void;
 }
 
-export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({ file, onClose }) => {
+export const FilePreviewModal: React.FC<FilePreviewModalProps> = ({ 
+  file, 
+  topic, 
+  onClose, 
+  onFileChange,
+  onUpdateRevisionDate 
+}) => {
+  const [seconds, setSeconds] = React.useState(0);
+  const [nextDate, setNextDate] = React.useState('');
+  const timerRef = React.useRef<NodeJS.Timeout | null>(null);
+
+  // Filter only PDFs from topic
+  const pdfFiles = React.useMemo(() => {
+    if (!topic) return [];
+    return topic.files.filter(f => f.mimeType.includes('pdf') || f.name.toLowerCase().endsWith('.pdf'));
+  }, [topic]);
+
+  const currentIndex = pdfFiles.findIndex(f => f.id === file?.id);
+  const hasMultipleFiles = pdfFiles.length > 1;
+
+  const handleNextFile = () => {
+    if (currentIndex < pdfFiles.length - 1) {
+      onFileChange(pdfFiles[currentIndex + 1]);
+    }
+  };
+
+  const handlePrevFile = () => {
+    if (currentIndex > 0) {
+      onFileChange(pdfFiles[currentIndex - 1]);
+    }
+  };
+
+  React.useEffect(() => {
+    if (file) {
+      setSeconds(0);
+      timerRef.current = setInterval(() => {
+        setSeconds(s => s + 1);
+      }, 1000);
+    } else {
+      if (timerRef.current) clearInterval(timerRef.current);
+    }
+
+    return () => {
+      if (timerRef.current) clearInterval(timerRef.current);
+    };
+  }, [file]);
+
+  React.useEffect(() => {
+    if (topic) {
+      setNextDate(topic.settings.nextRevisionDate || '');
+    }
+  }, [topic]);
+
   if (!file) return null;
+
+  const handleDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.value;
+    setNextDate(val);
+    onUpdateRevisionDate(val);
+  };
+
+  const formatTime = (totalSeconds: number) => {
+    const hrs = Math.floor(totalSeconds / 3600);
+    const mins = Math.floor((totalSeconds % 3600) / 60);
+    const secs = totalSeconds % 60;
+    return `${hrs > 0 ? hrs + ':' : ''}${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  const handleClose = () => {
+    const elapsedMinutes = Math.max(1, Math.round(seconds / 60));
+    onClose(elapsedMinutes);
+  };
 
   const previewUrl = `https://drive.google.com/file/d/${file.id}/preview`;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-xs p-2 sm:p-6 animate-in fade-in duration-150">
-      <div className="relative w-full max-w-5xl h-[90vh] bg-white dark:bg-zinc-900 rounded-2xl shadow-2xl flex flex-col overflow-hidden border border-zinc-200 dark:border-zinc-800">
-        {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-900/80">
-          <div className="flex items-center gap-3 min-w-0 pr-4">
-            <div className="p-2 bg-indigo-50 dark:bg-indigo-950/50 text-indigo-600 dark:text-indigo-400 rounded-lg">
-              <FileText className="w-5 h-5" />
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black animate-in fade-in duration-300">
+      <div className="relative w-full h-full bg-[#FDFBF7] flex flex-col overflow-hidden">
+        {/* Immersive Header */}
+        <div className="flex items-center justify-between px-8 py-6 bg-white/90 backdrop-blur-md border-b border-zinc-200 z-10 shadow-sm">
+          <div className="flex items-center gap-6 min-w-0 pr-8">
+            <div className="w-12 h-12 rounded-2xl bg-zinc-100 border border-zinc-200 flex items-center justify-center text-indigo-600 shrink-0">
+              <FileText className="w-6 h-6" />
             </div>
             <div className="truncate">
-              <h3 className="text-base font-semibold text-zinc-900 dark:text-zinc-100 truncate">
-                {file.name}
-              </h3>
-              <p className="text-xs text-zinc-500 dark:text-zinc-400">
-                {formatFileSize(file.size)} • {file.mimeType}
-              </p>
+              <div className="flex items-center gap-3 mb-1">
+                <h3 className="text-sm font-black text-zinc-900 truncate uppercase tracking-[0.2em]">
+                  {file.name}
+                </h3>
+                {hasMultipleFiles && (
+                  <span className="px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-600 text-[9px] font-black uppercase tracking-widest whitespace-nowrap">
+                    {currentIndex + 1} / {pdfFiles.length}
+                  </span>
+                )}
+              </div>
+              <div className="flex items-center gap-4 text-[10px] font-black text-zinc-400 uppercase tracking-[0.2em]">
+                <span>{formatFileSize(file.size)}</span>
+                <span aria-hidden="true" className="text-zinc-200">·</span>
+                <div className="flex items-center gap-3 px-3 py-1 bg-indigo-50 rounded-full border border-indigo-100 shadow-sm animate-in fade-in slide-in-from-top-2 duration-700">
+                  <div className="w-2.5 h-2.5 rounded-full bg-indigo-600 animate-pulse shadow-[0_0_10px_rgba(79,70,229,0.5)]" />
+                  <span className="text-indigo-600 font-mono tabular-nums font-black text-[11px] tracking-tight">{formatTime(seconds)}</span>
+                  <span className="text-[8px] font-black text-indigo-400 uppercase tracking-widest hidden lg:inline">Live Study Session</span>
+                </div>
+              </div>
             </div>
           </div>
 
-          <div className="flex items-center gap-2 shrink-0">
-            {file.webViewLink && (
-              <a
-                href={file.webViewLink}
-                target="_blank"
-                rel="noreferrer"
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-zinc-700 dark:text-zinc-200 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg hover:bg-zinc-100 dark:hover:bg-zinc-700 transition-colors shadow-2xs"
-              >
-                <ExternalLink className="w-3.5 h-3.5" />
-                <span>Open in Drive</span>
-              </a>
+          <div className="flex items-center gap-6 shrink-0">
+            {hasMultipleFiles && (
+              <div className="flex items-center gap-2 pr-8 border-r border-zinc-200">
+                <button
+                  onClick={handlePrevFile}
+                  disabled={currentIndex === 0}
+                  className="p-2 text-zinc-400 hover:text-indigo-600 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                  title="Previous Asset"
+                >
+                  <ChevronLeft className="w-5 h-5" />
+                </button>
+                <button
+                  onClick={handleNextFile}
+                  disabled={currentIndex === pdfFiles.length - 1}
+                  className="p-2 text-zinc-400 hover:text-indigo-600 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                  title="Next Asset"
+                >
+                  <ChevronRight className="w-5 h-5" />
+                </button>
+              </div>
             )}
-            {file.webContentLink && (
-              <a
-                href={file.webContentLink}
-                target="_blank"
-                rel="noreferrer"
-                download
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-950/40 rounded-lg hover:bg-indigo-100 dark:hover:bg-indigo-900/50 transition-colors"
-              >
-                <Download className="w-3.5 h-3.5" />
-                <span>Download</span>
-              </a>
+
+            {topic && (
+              <div className="flex items-center gap-4 pr-8 border-r border-zinc-200">
+                <span className="text-[10px] font-black text-zinc-400 uppercase tracking-[0.3em] hidden sm:inline">Next Calibration</span>
+                <input
+                  type="date"
+                  value={nextDate}
+                  onChange={handleDateChange}
+                  className="bg-white border border-zinc-200 rounded-xl px-4 py-2 text-[10px] font-black text-indigo-600 focus:outline-hidden focus:ring-1 focus:ring-indigo-500 cursor-pointer uppercase tracking-widest shadow-sm"
+                />
+              </div>
             )}
-            <button
-              onClick={onClose}
-              className="p-1.5 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 rounded-lg hover:bg-zinc-200/50 dark:hover:bg-zinc-800 transition-colors"
-            >
-              <X className="w-5 h-5" />
-            </button>
+            
+            <div className="flex items-center gap-6">
+              {file.webViewLink && (
+                <a
+                  href={file.webViewLink}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="hidden sm:inline-flex text-[10px] font-black uppercase tracking-[0.3em] text-zinc-400 hover:text-zinc-900 transition-all"
+                >
+                  Drive Link
+                </a>
+              )}
+              <button
+                onClick={handleClose}
+                className="px-8 py-3 bg-rose-600 hover:bg-rose-700 text-white rounded-2xl text-[10px] font-black uppercase tracking-[0.3em] transition-all shadow-lg shadow-rose-200 active:scale-95 flex items-center gap-3"
+              >
+                <X className="w-5 h-5" />
+                <span>Finalize Session</span>
+              </button>
+            </div>
           </div>
         </div>
 
-        {/* Preview Frame */}
-        <div className="flex-1 w-full bg-zinc-100 dark:bg-zinc-950 relative">
+        {/* Full-Screen Preview Frame */}
+        <div className="flex-1 w-full bg-black relative">
           <iframe
             src={previewUrl}
             title={file.name}

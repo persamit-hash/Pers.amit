@@ -1,9 +1,35 @@
-import { getAccessToken } from './auth';
+import { getAccessToken, clearCachedAccessToken, AuthExpiredError } from './auth';
 import { DriveFileItem, RevisionSettings, SubjectItem, TopicItem, UploadProgress } from '../types';
 
 const ROOT_FOLDER_NAME = 'ReviseDrive_StudyFiles';
 const SETTINGS_FILE_NAME = '.revise_settings.json';
 const CHUNK_SIZE = 4 * 1024 * 1024; // 4MB chunks (must be multiple of 256KB)
+
+// Offline cache keys
+const CACHE_KEY_SUBJECTS = 'revisedrive_cached_subjects';
+const CACHE_KEY_ROOT = 'revisedrive_cached_root_id';
+
+export function getCachedStructure(): { rootFolderId: string | null; subjects: SubjectItem[] } {
+  try {
+    const raw = localStorage.getItem(CACHE_KEY_SUBJECTS);
+    const root = localStorage.getItem(CACHE_KEY_ROOT);
+    if (raw) {
+      return { rootFolderId: root, subjects: JSON.parse(raw) };
+    }
+  } catch {
+    // ignore
+  }
+  return { rootFolderId: null, subjects: [] };
+}
+
+export function saveCachedStructure(rootFolderId: string, subjects: SubjectItem[]) {
+  try {
+    localStorage.setItem(CACHE_KEY_ROOT, rootFolderId);
+    localStorage.setItem(CACHE_KEY_SUBJECTS, JSON.stringify(subjects));
+  } catch {
+    // ignore
+  }
+}
 
 const defaultSettings: RevisionSettings = {
   frequency: 'spaced_repetition',
@@ -11,16 +37,65 @@ const defaultSettings: RevisionSettings = {
   syncToCalendar: true,
   syncToTasks: true,
   revisionCount: 0,
+  totalStudyMinutes: 0,
 };
 
 async function getAuthHeader(): Promise<Record<string, string>> {
   const token = await getAccessToken();
   if (!token) {
-    throw new Error('Not authenticated. Please sign in with Google.');
+    throw new AuthExpiredError('Not authenticated. Please sign in with Google.');
   }
   return {
     Authorization: `Bearer ${token}`,
   };
+}
+
+/**
+ * Resilient fetch wrapper with retry and auth expiry detection.
+ * Catches raw browser "Load failed" and converts it to actionable errors.
+ */
+async function driveFetch(
+  url: string,
+  options: RequestInit = {},
+  retries = 2
+): Promise<Response> {
+  let lastError: any = null;
+
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      const res = await fetch(url, options);
+
+      // Handle token expiration
+      if (res.status === 401) {
+        clearCachedAccessToken();
+        throw new AuthExpiredError();
+      }
+
+      return res;
+    } catch (err: any) {
+      lastError = err;
+
+      if (err instanceof AuthExpiredError || err.name === 'AuthExpiredError') {
+        throw err;
+      }
+
+      // Retry transient network failures (Load failed / Failed to fetch)
+      if (attempt < retries) {
+        await new Promise((r) => setTimeout(r, 500 * (attempt + 1)));
+      }
+    }
+  }
+
+  // Provide a friendly error message instead of raw browser "Load failed"
+  if (
+    lastError?.name === 'TypeError' ||
+    lastError?.message === 'Load failed' ||
+    lastError?.message === 'Failed to fetch'
+  ) {
+    throw new Error('Connection to Google Drive was interrupted. Please check your internet connection.');
+  }
+
+  throw lastError;
 }
 
 // Find or create the root folder for our app
@@ -29,7 +104,7 @@ export async function getOrCreateRootFolder(): Promise<string> {
   const q = encodeURIComponent(
     `name = '${ROOT_FOLDER_NAME}' and mimeType = 'application/vnd.google-apps.folder' and 'root' in parents and trashed = false`
   );
-  const searchRes = await fetch(
+  const searchRes = await driveFetch(
     `https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id, name)`,
     { headers }
   );
@@ -44,7 +119,7 @@ export async function getOrCreateRootFolder(): Promise<string> {
   }
 
   // Create root folder
-  const createRes = await fetch('https://www.googleapis.com/drive/v3/files', {
+  const createRes = await driveFetch('https://www.googleapis.com/drive/v3/files', {
     method: 'POST',
     headers: {
       ...headers,
@@ -66,7 +141,7 @@ export async function getOrCreateRootFolder(): Promise<string> {
   return created.id;
 }
 
-// Fetch all subjects, topics, and files
+// Fetch all subjects, topics, and files with parallelization and caching
 export async function fetchFullStructure(): Promise<{
   rootFolderId: string;
   subjects: SubjectItem[];
@@ -78,7 +153,7 @@ export async function fetchFullStructure(): Promise<{
   const subQuery = encodeURIComponent(
     `'${rootFolderId}' in parents and mimeType = 'application/vnd.google-apps.folder' and trashed = false`
   );
-  const subjectsRes = await fetch(
+  const subjectsRes = await driveFetch(
     `https://www.googleapis.com/drive/v3/files?q=${subQuery}&orderBy=name&fields=files(id, name, createdTime)`,
     { headers }
   );
@@ -90,95 +165,92 @@ export async function fetchFullStructure(): Promise<{
   const subjectsData = await subjectsRes.json();
   const rawSubjects = subjectsData.files || [];
 
-  const subjects: SubjectItem[] = [];
-
-  for (const sub of rawSubjects) {
-    // 2. List topics inside this subject
-    const topicQuery = encodeURIComponent(
-      `'${sub.id}' in parents and mimeType = 'application/vnd.google-apps.folder' and trashed = false`
-    );
-    const topicsRes = await fetch(
-      `https://www.googleapis.com/drive/v3/files?q=${topicQuery}&orderBy=name&fields=files(id, name, createdTime, description)`,
-      { headers }
-    );
-    const topicsData = topicsRes.ok ? await topicsRes.json() : { files: [] };
-    const rawTopics = topicsData.files || [];
-
-    const topics: TopicItem[] = [];
-
-    for (const top of rawTopics) {
-      // 3. List files inside this topic
-      const filesQuery = encodeURIComponent(
-        `'${top.id}' in parents and mimeType != 'application/vnd.google-apps.folder' and name != '${SETTINGS_FILE_NAME}' and trashed = false`
-      );
-      const filesRes = await fetch(
-        `https://www.googleapis.com/drive/v3/files?q=${filesQuery}&orderBy=name&fields=files(id, name, mimeType, size, webViewLink, webContentLink, thumbnailLink, iconLink, createdTime, modifiedTime)`,
-        { headers }
-      );
-      const filesData = filesRes.ok ? await filesRes.json() : { files: [] };
-      const rawFiles: DriveFileItem[] = (filesData.files || []).map((f: any) => ({
-        id: f.id,
-        name: f.name,
-        mimeType: f.mimeType,
-        size: f.size ? parseInt(f.size, 10) : 0,
-        webViewLink: f.webViewLink,
-        webContentLink: f.webContentLink,
-        thumbnailLink: f.thumbnailLink,
-        iconLink: f.iconLink,
-        createdTime: f.createdTime,
-        modifiedTime: f.modifiedTime,
-      }));
-
-      // 4. Fetch settings for this topic
-      let settings = { ...defaultSettings };
+  // Parallel fetch topics across subjects
+  const subjects: SubjectItem[] = await Promise.all(
+    rawSubjects.map(async (sub: any) => {
       try {
-        const settingsQuery = encodeURIComponent(
-          `'${top.id}' in parents and name = '${SETTINGS_FILE_NAME}' and trashed = false`
+        const topicQuery = encodeURIComponent(
+          `'${sub.id}' in parents and mimeType = 'application/vnd.google-apps.folder' and trashed = false`
         );
-        const settingsRes = await fetch(
-          `https://www.googleapis.com/drive/v3/files?q=${settingsQuery}&fields=files(id)`,
+        const topicsRes = await driveFetch(
+          `https://www.googleapis.com/drive/v3/files?q=${topicQuery}&orderBy=name&fields=files(id, name, createdTime, description)`,
           { headers }
         );
-        const settingsData = await settingsRes.json();
-        if (settingsData.files && settingsData.files.length > 0) {
-          const fileId = settingsData.files[0].id;
-          const contentRes = await fetch(
-            `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`,
-            { headers }
-          );
-          if (contentRes.ok) {
-            const parsed = await contentRes.json();
-            settings = { ...defaultSettings, ...parsed };
-          }
-        } else if (top.description) {
-          try {
-            settings = { ...defaultSettings, ...JSON.parse(top.description) };
-          } catch {
-            // keep default
-          }
-        }
-      } catch (err) {
-        console.warn('Failed reading topic settings file:', err);
+        const topicsData = topicsRes.ok ? await topicsRes.json() : { files: [] };
+        const rawTopics = topicsData.files || [];
+
+        // Parallel fetch files across topics
+        const topics: TopicItem[] = await Promise.all(
+          rawTopics.map(async (top: any) => {
+            let rawFiles: DriveFileItem[] = [];
+            try {
+              const filesQuery = encodeURIComponent(
+                `'${top.id}' in parents and mimeType != 'application/vnd.google-apps.folder' and name != '${SETTINGS_FILE_NAME}' and trashed = false`
+              );
+              const filesRes = await driveFetch(
+                `https://www.googleapis.com/drive/v3/files?q=${filesQuery}&orderBy=name&fields=files(id, name, mimeType, size, webViewLink, webContentLink, thumbnailLink, iconLink, createdTime, modifiedTime)`,
+                { headers }
+              );
+              const filesData = filesRes.ok ? await filesRes.json() : { files: [] };
+              rawFiles = (filesData.files || []).map((f: any) => ({
+                id: f.id,
+                name: f.name,
+                mimeType: f.mimeType,
+                size: f.size ? parseInt(f.size, 10) : 0,
+                webViewLink: f.webViewLink,
+                webContentLink: f.webContentLink,
+                thumbnailLink: f.thumbnailLink,
+                iconLink: f.iconLink,
+                createdTime: f.createdTime,
+                modifiedTime: f.modifiedTime,
+              }));
+            } catch (fileErr) {
+              console.warn(`Could not load files for topic ${top.name}:`, fileErr);
+            }
+
+            // Read settings from topic description (instant & avoids CORS alt=media redirects)
+            let settings = { ...defaultSettings };
+            if (top.description) {
+              try {
+                const parsed = JSON.parse(top.description);
+                settings = { ...defaultSettings, ...parsed };
+              } catch {
+                // keep defaults
+              }
+            }
+
+            return {
+              id: top.id,
+              name: top.name,
+              subjectId: sub.id,
+              subjectName: sub.name,
+              createdTime: top.createdTime,
+              files: rawFiles,
+              settings,
+            };
+          })
+        );
+
+        return {
+          id: sub.id,
+          name: sub.name,
+          createdTime: sub.createdTime,
+          topics,
+        };
+      } catch (subErr) {
+        console.warn(`Could not load topics for subject ${sub.name}:`, subErr);
+        return {
+          id: sub.id,
+          name: sub.name,
+          createdTime: sub.createdTime,
+          topics: [],
+        };
       }
+    })
+  );
 
-      topics.push({
-        id: top.id,
-        name: top.name,
-        subjectId: sub.id,
-        subjectName: sub.name,
-        createdTime: top.createdTime,
-        files: rawFiles,
-        settings,
-      });
-    }
-
-    subjects.push({
-      id: sub.id,
-      name: sub.name,
-      createdTime: sub.createdTime,
-      topics,
-    });
-  }
+  // Save to offline cache
+  saveCachedStructure(rootFolderId, subjects);
 
   return { rootFolderId, subjects };
 }
@@ -188,7 +260,7 @@ export async function createSubject(name: string): Promise<SubjectItem> {
   const rootFolderId = await getOrCreateRootFolder();
   const headers = await getAuthHeader();
 
-  const res = await fetch('https://www.googleapis.com/drive/v3/files', {
+  const res = await driveFetch('https://www.googleapis.com/drive/v3/files', {
     method: 'POST',
     headers: {
       ...headers,
@@ -227,7 +299,7 @@ export async function createTopic(
     ...initialSettings,
   };
 
-  const res = await fetch('https://www.googleapis.com/drive/v3/files', {
+  const res = await driveFetch('https://www.googleapis.com/drive/v3/files', {
     method: 'POST',
     headers: {
       ...headers,
@@ -271,7 +343,7 @@ export async function saveTopicSettings(
 
   // Also update topic description for redundancy
   try {
-    await fetch(`https://www.googleapis.com/drive/v3/files/${topicId}`, {
+    await driveFetch(`https://www.googleapis.com/drive/v3/files/${topicId}`, {
       method: 'PATCH',
       headers: {
         ...headers,
@@ -286,64 +358,68 @@ export async function saveTopicSettings(
   }
 
   // Find existing settings file
-  const q = encodeURIComponent(
-    `'${topicId}' in parents and name = '${SETTINGS_FILE_NAME}' and trashed = false`
-  );
-  const searchRes = await fetch(
-    `https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id)`,
-    { headers }
-  );
-  const data = await searchRes.json();
-
-  const fileContent = JSON.stringify(settings, null, 2);
-  const blob = new Blob([fileContent], { type: 'application/json' });
-
-  if (data.files && data.files.length > 0) {
-    // Update existing
-    const fileId = data.files[0].id;
-    await fetch(
-      `https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=media`,
-      {
-        method: 'PATCH',
-        headers: {
-          ...headers,
-          'Content-Type': 'application/json',
-        },
-        body: blob,
-      }
+  try {
+    const q = encodeURIComponent(
+      `'${topicId}' in parents and name = '${SETTINGS_FILE_NAME}' and trashed = false`
     );
-  } else {
-    // Create new multipart file
-    const metadata = {
-      name: SETTINGS_FILE_NAME,
-      parents: [topicId],
-      mimeType: 'application/json',
-    };
-
-    const boundary = '-------314159265358979323846';
-    const delimiter = `\r\n--${boundary}\r\n`;
-    const closeDelimiter = `\r\n--${boundary}--`;
-
-    const multipartRequestBody =
-      delimiter +
-      'Content-Type: application/json; charset=UTF-8\r\n\r\n' +
-      JSON.stringify(metadata) +
-      delimiter +
-      'Content-Type: application/json\r\n\r\n' +
-      fileContent +
-      closeDelimiter;
-
-    await fetch(
-      'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart',
-      {
-        method: 'POST',
-        headers: {
-          ...headers,
-          'Content-Type': `multipart/related; boundary=${boundary}`,
-        },
-        body: multipartRequestBody,
-      }
+    const searchRes = await driveFetch(
+      `https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id)`,
+      { headers }
     );
+    const data = await searchRes.json();
+
+    const fileContent = JSON.stringify(settings, null, 2);
+    const blob = new Blob([fileContent], { type: 'application/json' });
+
+    if (data.files && data.files.length > 0) {
+      // Update existing
+      const fileId = data.files[0].id;
+      await driveFetch(
+        `https://www.googleapis.com/upload/drive/v3/files/${fileId}?uploadType=media`,
+        {
+          method: 'PATCH',
+          headers: {
+            ...headers,
+            'Content-Type': 'application/json',
+          },
+          body: blob,
+        }
+      );
+    } else {
+      // Create new multipart file
+      const metadata = {
+        name: SETTINGS_FILE_NAME,
+        parents: [topicId],
+        mimeType: 'application/json',
+      };
+
+      const boundary = '-------314159265358979323846';
+      const delimiter = `\r\n--${boundary}\r\n`;
+      const closeDelimiter = `\r\n--${boundary}--`;
+
+      const multipartRequestBody =
+        delimiter +
+        'Content-Type: application/json; charset=UTF-8\r\n\r\n' +
+        JSON.stringify(metadata) +
+        delimiter +
+        'Content-Type: application/json\r\n\r\n' +
+        fileContent +
+        closeDelimiter;
+
+      await driveFetch(
+        'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart',
+        {
+          method: 'POST',
+          headers: {
+            ...headers,
+            'Content-Type': `multipart/related; boundary=${boundary}`,
+          },
+          body: multipartRequestBody,
+        }
+      );
+    }
+  } catch (err) {
+    console.warn('Settings file write fallback warning:', err);
   }
 }
 
@@ -492,7 +568,7 @@ export async function uploadFileToTopic(
 // Delete a file from Google Drive
 export async function deleteDriveFile(fileId: string): Promise<void> {
   const headers = await getAuthHeader();
-  const res = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}`, {
+  const res = await driveFetch(`https://www.googleapis.com/drive/v3/files/${fileId}`, {
     method: 'DELETE',
     headers,
   });
@@ -505,7 +581,7 @@ export async function deleteDriveFile(fileId: string): Promise<void> {
 // Rename folder or file
 export async function renameDriveItem(itemId: string, newName: string): Promise<void> {
   const headers = await getAuthHeader();
-  const res = await fetch(`https://www.googleapis.com/drive/v3/files/${itemId}`, {
+  const res = await driveFetch(`https://www.googleapis.com/drive/v3/files/${itemId}`, {
     method: 'PATCH',
     headers: {
       ...headers,

@@ -64,6 +64,17 @@ export const getAccessToken = async (): Promise<string | null> => {
   return cachedAccessToken;
 };
 
+export const clearCachedAccessToken = (): void => {
+  cachedAccessToken = null;
+};
+
+export class AuthExpiredError extends Error {
+  constructor(message = 'Your Google session has expired. Please sign in again.') {
+    super(message);
+    this.name = 'AuthExpiredError';
+  }
+}
+
 export const logout = async (): Promise<void> => {
   await signOut(auth);
   cachedAccessToken = null;
