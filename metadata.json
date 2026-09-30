@@ -1,0 +1,6 @@
+{
+  "name": "ReviseDrive - Study & Revision Hub",
+  "description": "Organize study materials in Google Drive subject and topic wise, upload large PDFs up to 200MB with auto-sync, and schedule smart spaced revision reminders via Google Calendar and Tasks.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
